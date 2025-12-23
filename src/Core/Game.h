@@ -1,13 +1,13 @@
 #pragma once
 #include <SFML/Graphics.hpp>
 #include <memory>
+#include <vector>
 #include "../Graphics/Shader.h"
 #include "../Graphics/Renderer.h"
 #include "../Entities/Player.h"
 #include "../Entities/Map.h"
-#include "../Graphics/PostProcessor.h"
 #include "../Core/AudioManager.h"
-
+#include "../Graphics/PostProcessor.h"
 
 enum class GameState { MENU, PLAYING, PAUSED, GAME_OVER, WIN };
 
@@ -25,14 +25,6 @@ private:
     void Render();
     void RenderUI();
 
-    std::unique_ptr<Shader> m_InstancedShader; // NEW
-    std::vector<glm::mat4> m_WallTransforms;   // NEW
-    std::vector<glm::mat4> m_FloorTransforms;  // NEW
-    std::unique_ptr<AudioManager> m_Audio;
-
-    std::unique_ptr<PostProcessor> m_PostProcessor;
-
-
     // Helpers
     void ResetGame();
 
@@ -45,8 +37,11 @@ private:
     // Subsystems
     std::unique_ptr<Player> m_Player;
     std::unique_ptr<Map> m_Map;
-    std::unique_ptr<Shader> m_Shader;
+    std::unique_ptr<Shader> m_Shader;          // Standard Shader (Objects)
+    std::unique_ptr<Shader> m_InstancedShader; // Optimized Shader (Walls)
     std::unique_ptr<Renderer> m_Renderer;
+    std::unique_ptr<AudioManager> m_Audio;
+    std::unique_ptr<PostProcessor> m_PostProcessor;
 
     // Resources
     unsigned int m_FloorTex;
@@ -54,11 +49,15 @@ private:
     unsigned int m_CeilingTex;
     unsigned int m_PaperTex;
 
-    // UI Resources (ORDER MATTERS FOR INITIALIZATION)
-    sf::Font m_Font;        // Must be before Texts
+    // Data for Rendering
+    std::vector<glm::mat4> m_WallTransforms;
+
+    // Gameplay Data
+    glm::vec3 m_PaperPos;
+    glm::vec3 m_PlayerStartPos;
+
+    // UI Resources
+    sf::Font m_Font;
     sf::Text m_UIText;
     sf::Text m_CenterText;
-
-    // Objective
-    glm::vec3 m_PaperPos;
 };

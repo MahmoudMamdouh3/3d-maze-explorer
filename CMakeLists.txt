@@ -50,6 +50,8 @@ add_executable(${PROJECT_NAME}
         # Add these to add_executable:
         src/Core/AudioManager.cpp
         src/Core/AudioManager.h
+        # Add to add_executable
+        src/Physics/AABB.h
 )
 
 # --- Include Paths ---

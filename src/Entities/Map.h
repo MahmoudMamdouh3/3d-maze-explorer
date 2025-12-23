@@ -1,24 +1,25 @@
 #pragma once
 #include <vector>
-
-// Constants for Map Size
-constexpr int MAP_WIDTH = 10;
-constexpr int MAP_HEIGHT = 10;
+#include <string>
+#include <glm/glm.hpp>
+#include "../Physics/AABB.h"
 
 class Map {
 public:
     Map();
 
-    // Returns true if there is a wall at world coordinates (x, z)
-    // Radius is used to prevent the player from clipping into the wall
-    bool IsWall(float x, float z, float playerRadius) const;
+    // Load level from a text file
+    // Returns the Player Start position found in the file
+    bool LoadLevel(const std::string& path, glm::vec3& outPlayerStart, glm::vec3& outPaperPos);
 
-    // Get the raw grid data (for rendering)
+    std::vector<AABB> GetNearbyWalls(glm::vec3 position, float range) const;
+
     int GetTile(int x, int z) const;
-
-    int GetWidth() const { return MAP_WIDTH; }
-    int GetHeight() const { return MAP_HEIGHT; }
+    int GetWidth() const { return m_Width; }
+    int GetHeight() const { return m_Height; }
 
 private:
-    int grid[MAP_HEIGHT][MAP_WIDTH];
+    int m_Width;
+    int m_Height;
+    std::vector<int> m_Grid; // Dynamic array (vector) instead of [10][10]
 };

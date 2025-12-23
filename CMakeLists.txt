@@ -47,6 +47,9 @@ add_executable(${PROJECT_NAME}
         src/Entities/Map.h
         src/Graphics/PostProcessor.cpp
         src/Graphics/PostProcessor.h
+        # Add these to add_executable:
+        src/Core/AudioManager.cpp
+        src/Core/AudioManager.h
 )
 
 # --- Include Paths ---

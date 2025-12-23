@@ -68,6 +68,25 @@ Game::Game()
     }
     m_UIText.setCharacterSize(24); m_UIText.setFillColor(sf::Color::White);
     m_CenterText.setCharacterSize(40); m_CenterText.setFillColor(sf::Color::Red);
+
+    // audio
+    // ... Init Subsystems ...
+    m_Audio = std::make_unique<AudioManager>();
+
+    // Load Sounds (Make sure you have .wav files or these will error log)
+    // If you don't have files yet, the game runs but logs errors.
+    m_Audio->LoadSound("footstep", "assets/sounds/footstep.wav");
+    m_Audio->LoadSound("hum", "assets/sounds/fluorescent_hum.wav");
+    m_Audio->LoadSound("win", "assets/sounds/win.wav");
+    m_Audio->LoadSound("lose", "assets/sounds/lose.wav");
+
+    // Play ambient drone music
+    m_Audio->PlayMusic("assets/sounds/ambience.ogg", 30.0f);
+
+    // Create a spatial hum at the Objective position so you can HEAR it before you see it
+    // (Critique #2 - The "Paranoia" element)
+    m_Audio->PlaySpatial("hum", m_PaperPos, 100.0f, 2.0f);
+
 }
 
 Game::~Game() {
@@ -118,16 +137,22 @@ void Game::ResetGame() {
 }
 
 void Game::Update(float dt) {
+    // Update the 3D Ears
+    m_Audio->UpdateListener(m_Player->GetPosition(), m_Player->GetFront(), glm::vec3(0,1,0));
+
     // NEW: Update Post Processor effects
     m_PostProcessor->Update(dt);
 
     if (m_State == GameState::PLAYING) {
         m_Player->HandleInput(m_Window);
-        m_Player->Update(dt, *m_Map);
+        m_Player->Update(dt, *m_Map, *m_Audio);
+
         if (glm::distance(m_Player->GetPosition(), m_PaperPos) < 1.0f) {
+            m_Audio->PlayGlobal("win"); // <-- ADD THIS
             m_State = GameState::WIN; m_Window.setMouseCursorVisible(true); m_Window.setMouseCursorGrabbed(false);
         }
         if (m_Player->IsDead()) {
+            m_Audio->PlayGlobal("lose"); // <-- ADD THIS
             m_State = GameState::GAME_OVER; m_Window.setMouseCursorVisible(true); m_Window.setMouseCursorGrabbed(false);
         }
     }

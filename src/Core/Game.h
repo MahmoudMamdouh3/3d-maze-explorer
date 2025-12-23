@@ -22,6 +22,11 @@ private:
     void Render();
     void RenderUI();
 
+    std::unique_ptr<Shader> m_InstancedShader; // NEW
+    std::vector<glm::mat4> m_WallTransforms;   // NEW
+    std::vector<glm::mat4> m_FloorTransforms;  // NEW
+
+
     // Helpers
     void ResetGame();
 

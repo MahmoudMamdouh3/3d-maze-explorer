@@ -40,3 +40,10 @@ _deps/
 # Custom Assets/Shaders (Keep source assets, ignore build-copied ones)
 # (Optional: uncomment if you don't want the build/assets to be tracked)
 # build/assets/
+
+# Ignore all archives
+*.zip
+*.7z
+*.rar
+
+# Ignore large downloaded asset packs

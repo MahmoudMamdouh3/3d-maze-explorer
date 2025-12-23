@@ -45,6 +45,8 @@ add_executable(${PROJECT_NAME}
         src/Entities/Player.h
         src/Entities/Map.cpp
         src/Entities/Map.h
+        src/Graphics/PostProcessor.cpp
+        src/Graphics/PostProcessor.h
 )
 
 # --- Include Paths ---

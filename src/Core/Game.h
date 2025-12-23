@@ -5,6 +5,7 @@
 #include "../Graphics/Renderer.h"
 #include "../Entities/Player.h"
 #include "../Entities/Map.h"
+#include "../Graphics/PostProcessor.h"
 
 enum class GameState { MENU, PLAYING, PAUSED, GAME_OVER, WIN };
 
@@ -25,6 +26,8 @@ private:
     std::unique_ptr<Shader> m_InstancedShader; // NEW
     std::vector<glm::mat4> m_WallTransforms;   // NEW
     std::vector<glm::mat4> m_FloorTransforms;  // NEW
+
+    std::unique_ptr<PostProcessor> m_PostProcessor;
 
 
     // Helpers

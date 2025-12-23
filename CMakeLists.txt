@@ -12,12 +12,11 @@ FetchContent_Declare(
         GIT_TAG 3.0.2
         GIT_SHALLOW ON
 )
-# Speed up the build by disabling SFML stuff you don't need
 set(SFML_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(SFML_BUILD_TEST_SUITE OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(SFML)
 
-# --- GLM (Math Library) ---
+# --- GLM ---
 FetchContent_Declare(
         glm
         GIT_REPOSITORY https://github.com/g-truc/glm.git
@@ -27,32 +26,41 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(glm)
 
 # --- GLAD ---
-# Updated paths to match your vendor/glad/src/glad.c structure
 add_library(glad STATIC "vendor/glad/src/glad.c")
 target_include_directories(glad PUBLIC "vendor/glad/include")
 
 # --- Executable ---
+# Include ALL the new source files here
 add_executable(${PROJECT_NAME}
         src/main.cpp
-        src/Camera.cpp
-        src/Renderer.cpp
+        src/Core/Game.cpp
+        src/Core/Game.h
+        src/Core/ResourceManager.cpp
+        src/Core/ResourceManager.h
+        src/Graphics/Shader.cpp
+        src/Graphics/Shader.h
+        src/Graphics/Renderer.cpp
+        src/Graphics/Renderer.h
+        src/Entities/Player.cpp
+        src/Entities/Player.h
+        src/Entities/Map.cpp
+        src/Entities/Map.h
 )
 
 # --- Include Paths ---
-# This tells the compiler where to find your .hpp files
-target_include_directories(${PROJECT_NAME} PRIVATE include)
+target_include_directories(${PROJECT_NAME} PRIVATE src)
 
 # --- Linking ---
 target_link_libraries(${PROJECT_NAME} PRIVATE
         sfml-graphics
         sfml-window
         sfml-system
+        sfml-audio
         glad
         glm::glm
 )
 
 # --- Asset Copying ---
-# This ensures your shaders and textures are in the same folder as the .exe
 add_custom_command(TARGET ${PROJECT_NAME} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_directory
         "${CMAKE_SOURCE_DIR}/assets" "$<TARGET_FILE_DIR:${PROJECT_NAME}>/assets"

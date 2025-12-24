@@ -21,6 +21,7 @@ public:
     void UpdateListener(glm::vec3 position, glm::vec3 forward, glm::vec3 up);
     void PlayMusic(const std::string& path, float volume = 50.0f);
     void StopMusic();
+    void StopAllSounds(); // NEW
 
 private:
     std::unordered_map<std::string, sf::SoundBuffer> m_Buffers;

@@ -79,9 +79,10 @@ Game::Game()
     m_WallTransforms.clear();
     for (int x = 0; x < m_Map->GetWidth(); x++) {
         for (int z = 0; z < m_Map->GetHeight(); z++) {
-            if (m_Map->GetTile(x, z) == 1) { // Static Walls only
+            if (m_Map->GetTile(x, z) == 1) {
                 glm::mat4 model = glm::mat4(1.0f);
-                model = glm::translate(model, glm::vec3(x, 1.5f, z));
+                // FIX: Add +0.5f to align mesh with the new physics center
+                model = glm::translate(model, glm::vec3(x + 0.5f, 1.5f, z + 0.5f));
                 model = glm::scale(model, glm::vec3(1.0f, 4.0f, 1.0f));
                 m_WallTransforms.push_back(model);
             }
@@ -236,12 +237,13 @@ void Game::Render() {
         std::uniform_real_distribution<float> dist(0.0f, 1.0f);
         float flickerVal = dist(m_RNG) > 0.9f ? 0.2f : 1.0f;
 
-        // A. DRAW INSTANCED WALLS
+        // A. DRAW INSTANCED WALLS (These were already correct!)
         m_InstancedShader->Use();
         m_InstancedShader->SetMat4("projection", projection);
         m_InstancedShader->SetMat4("view", view);
         m_InstancedShader->SetVec3("viewPos", m_Player->GetPosition());
 
+        // ... (Keep your Lighting Uniforms exactly as they were) ...
         m_InstancedShader->SetVec3("spotLight.position", m_Player->GetFlashlightPosition());
         m_InstancedShader->SetVec3("spotLight.direction", m_Player->GetFront());
         m_InstancedShader->SetFloat("spotLight.cutOff", std::cos(glm::radians(12.5f)));
@@ -262,6 +264,8 @@ void Game::Render() {
         m_Shader->SetMat4("projection", projection);
         m_Shader->SetMat4("view", view);
         m_Shader->SetVec3("viewPos", m_Player->GetPosition());
+
+        // ... (Copy Lighting Uniforms to m_Shader here as well) ...
         m_Shader->SetVec3("spotLight.position", m_Player->GetFlashlightPosition());
         m_Shader->SetVec3("spotLight.direction", m_Player->GetFront());
         m_Shader->SetFloat("spotLight.cutOff", std::cos(glm::radians(12.5f)));
@@ -279,14 +283,16 @@ void Game::Render() {
             for (int z = 0; z < m_Map->GetHeight(); z++) {
                 int tile = m_Map->GetTile(x, z);
 
-                // Floor & Ceiling (Draw these for Key/OpenDoor tiles too)
+                // Floor & Ceiling
                 if (tile == 0 || tile == 3 || tile == 4) {
                     glm::mat4 model = glm::mat4(1.0f);
-                    model = glm::translate(model, glm::vec3(x, -0.5f, z));
+                    // FIX 1: Add +0.5f to X and Z
+                    model = glm::translate(model, glm::vec3(x + 0.5f, -0.5f, z + 0.5f));
                     m_Renderer->DrawCube(*m_Shader, model, m_FloorTex);
 
                     model = glm::mat4(1.0f);
-                    model = glm::translate(model, glm::vec3(x, 3.5f, z));
+                    // FIX 2: Add +0.5f to X and Z
+                    model = glm::translate(model, glm::vec3(x + 0.5f, 3.5f, z + 0.5f));
                     model = glm::rotate(model, glm::radians(180.0f), glm::vec3(1.0f, 0.0f, 0.0f));
                     m_Renderer->DrawCube(*m_Shader, model, m_CeilingTex);
                 }
@@ -295,15 +301,17 @@ void Game::Render() {
                 if (tile == 2 || tile == 5) {
                     unsigned int tex = (tile == 2) ? m_DoorTex : m_LockedDoorTex;
 
-                    // 1. The Actual Door (Height 2.5)
+                    // 1. The Actual Door
                     glm::mat4 model = glm::mat4(1.0f);
-                    model = glm::translate(model, glm::vec3(x, 0.75f, z));
+                    // FIX 3: Add +0.5f to X and Z
+                    model = glm::translate(model, glm::vec3(x + 0.5f, 0.75f, z + 0.5f));
                     model = glm::scale(model, glm::vec3(1.0f, 2.5f, 1.0f));
                     m_Renderer->DrawCube(*m_Shader, model, tex);
 
-                    // 2. The Wall Filler Above (Height 1.5)
+                    // 2. The Wall Filler Above
                     model = glm::mat4(1.0f);
-                    model = glm::translate(model, glm::vec3(x, 2.75f, z));
+                    // FIX 4: Add +0.5f to X and Z
+                    model = glm::translate(model, glm::vec3(x + 0.5f, 2.75f, z + 0.5f));
                     model = glm::scale(model, glm::vec3(1.0f, 1.5f, 1.0f));
                     m_Renderer->DrawCube(*m_Shader, model, m_WallTex);
                 }
@@ -312,7 +320,8 @@ void Game::Render() {
                 if (tile == 4) {
                     glm::mat4 model = glm::mat4(1.0f);
                     float floatY = -0.2f + std::sin(m_GameTime.getElapsedTime().asSeconds() * 3.0f) * 0.1f;
-                    model = glm::translate(model, glm::vec3(x, floatY, z));
+                    // FIX 5: Add +0.5f to X and Z
+                    model = glm::translate(model, glm::vec3(x + 0.5f, floatY, z + 0.5f));
                     model = glm::scale(model, glm::vec3(0.2f, 0.2f, 0.2f));
                     m_Renderer->DrawCube(*m_Shader, model, m_KeyTex);
                 }
@@ -322,6 +331,7 @@ void Game::Render() {
         // Draw Objective Paper
         glm::mat4 model = glm::mat4(1.0f);
         float floatY = m_PaperPos.y + std::sin(m_GameTime.getElapsedTime().asSeconds() * 2.0f) * 0.1f;
+        // PaperPos was already loaded with +0.5f in Map.cpp, so this is safe!
         model = glm::translate(model, glm::vec3(m_PaperPos.x, floatY, m_PaperPos.z));
         model = glm::scale(model, glm::vec3(0.3f, 0.01f, 0.4f));
         m_Renderer->DrawCube(*m_Shader, model, m_PaperTex);

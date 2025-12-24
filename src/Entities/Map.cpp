@@ -79,17 +79,22 @@ void Map::SetTile(int x, int z, int type) {
 std::vector<AABB> Map::GetNearbyWalls(glm::vec3 position, float range) const {
     std::vector<AABB> walls;
 
-    int startX = std::max(0, static_cast<int>(position.x - range));
-    int endX = std::min(m_Width - 1, static_cast<int>(position.x + range));
-    int startZ = std::max(0, static_cast<int>(position.z - range));
-    int endZ = std::min(m_Height - 1, static_cast<int>(position.z + range));
+    // Expand search radius slightly to ensure we don't miss corners
+    int startX = std::max(0, static_cast<int>(position.x - range - 1.0f));
+    int endX = std::min(m_Width - 1, static_cast<int>(position.x + range + 1.0f));
+    int startZ = std::max(0, static_cast<int>(position.z - range - 1.0f));
+    int endZ = std::min(m_Height - 1, static_cast<int>(position.z + range + 1.0f));
 
     for (int z = startZ; z <= endZ; z++) {
         for (int x = startX; x <= endX; x++) {
             int tile = GetTile(x, z);
-            // Collide with Walls (1), Closed Doors (2), and Locked Doors (5)
+            // 1=Wall, 2=Door, 5=LockedDoor
             if (tile == 1 || tile == 2 || tile == 5) {
-                walls.emplace_back(glm::vec3(x, 1.5f, z), glm::vec3(1.0f, 4.0f, 1.0f));
+                // FIX: Add +0.5f to X and Z to center the collider in the grid cell
+                walls.emplace_back(
+                    glm::vec3(x + 0.5f, 1.5f, z + 0.5f),
+                    glm::vec3(1.0f, 4.0f, 1.0f)
+                );
             }
         }
     }

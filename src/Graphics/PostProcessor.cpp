@@ -5,31 +5,38 @@ PostProcessor::PostProcessor(int width, int height)
 {
     screenShader.Load("assets/shaders/screen.vert", "assets/shaders/postprocess.frag");
 
-    // 1. Setup Multisampled Framebuffer (MSFBO) - We draw here first!
+    // ---------------------------------------------------------
+    // 1. Setup Multisampled Framebuffer (MSFBO)
+    //    This is where the 3D scene is actually drawn.
+    // ---------------------------------------------------------
     glGenFramebuffers(1, &MSFBO);
     glBindFramebuffer(GL_FRAMEBUFFER, MSFBO);
 
-    // Create Multisampled Renderbuffer for Color
-    unsigned int colorRBO;
-    glGenRenderbuffers(1, &colorRBO);
-    glBindRenderbuffer(GL_RENDERBUFFER, colorRBO);
-    // Note the 'Multisample' call and '4' samples
+    // Create a Multisampled Color Buffer (RBO)
+    glGenRenderbuffers(1, &RBO);
+    glBindRenderbuffer(GL_RENDERBUFFER, RBO);
+    // NOTICE: 'Multisample' with 4 samples
     glRenderbufferStorageMultisample(GL_RENDERBUFFER, 4, GL_RGB, width, height);
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, colorRBO);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, RBO);
 
-    // Create Multisampled Renderbuffer for Depth/Stencil
-    glGenRenderbuffers(1, &MSRBO);
-    glBindRenderbuffer(GL_RENDERBUFFER, MSRBO);
+    // Create a Multisampled Depth Buffer (RBO)
+    glGenRenderbuffers(1, &DB);
+    glBindRenderbuffer(GL_RENDERBUFFER, DB);
+    // NOTICE: 'Multisample' with 4 samples
     glRenderbufferStorageMultisample(GL_RENDERBUFFER, 4, GL_DEPTH24_STENCIL8, width, height);
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, MSRBO);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, DB);
 
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
         std::cerr << "ERROR::POSTPROCESSOR: MSFBO is not complete!" << std::endl;
 
-    // 2. Setup Intermediate Framebuffer (FBO) - Standard Texture for screen quad
+    // ---------------------------------------------------------
+    // 2. Setup Intermediate Framebuffer (FBO)
+    //    We copy the MSFBO to this so we can treat it like a texture.
+    // ---------------------------------------------------------
     glGenFramebuffers(1, &FBO);
     glBindFramebuffer(GL_FRAMEBUFFER, FBO);
 
+    // Create the Texture Attachment (Standard 2D Texture)
     glGenTextures(1, &TCB);
     glBindTexture(GL_TEXTURE_2D, TCB);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
@@ -41,12 +48,14 @@ PostProcessor::PostProcessor(int width, int height)
         std::cerr << "ERROR::POSTPROCESSOR: Intermediate FBO is not complete!" << std::endl;
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
     InitRenderData();
 }
 
 PostProcessor::~PostProcessor() {
     glDeleteFramebuffers(1, &MSFBO);
-    glDeleteRenderbuffers(1, &MSRBO);
+    glDeleteRenderbuffers(1, &RBO);
+    glDeleteRenderbuffers(1, &DB);
     glDeleteFramebuffers(1, &FBO);
     glDeleteTextures(1, &TCB);
     glDeleteVertexArrays(1, &rectVAO);
@@ -57,15 +66,14 @@ void PostProcessor::Resize(int width, int height) {
     m_Width = width;
     m_Height = height;
 
-    // Resize Multisampled buffers
-    glBindFramebuffer(GL_FRAMEBUFFER, MSFBO);
-    // We cannot resize RBOs easily, usually better to delete and recreate,
-    // but for simplicity here we just re-allocate storage
-    unsigned int colorRBO = 0; // You'd need to track this ID class-wide to do it perfectly properly
-    // For now, simpler reset:
-    // (In a full engine, you would delete the old RBOs and Gen new ones here)
+    // 1. Resize Multisampled Buffers
+    glBindRenderbuffer(GL_RENDERBUFFER, RBO);
+    glRenderbufferStorageMultisample(GL_RENDERBUFFER, 4, GL_RGB, width, height);
 
-    // Quick Resize Logic for the Texture (Intermediate)
+    glBindRenderbuffer(GL_RENDERBUFFER, DB);
+    glRenderbufferStorageMultisample(GL_RENDERBUFFER, 4, GL_DEPTH24_STENCIL8, width, height);
+
+    // 2. Resize Standard Texture
     glBindTexture(GL_TEXTURE_2D, TCB);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
 }
@@ -78,23 +86,31 @@ void PostProcessor::BeginRender() {
     // Render to the Multisampled buffer
     glBindFramebuffer(GL_FRAMEBUFFER, MSFBO);
     glEnable(GL_DEPTH_TEST);
+
+    // IMPORTANT: Enable Multisampling
+    glEnable(GL_MULTISAMPLE);
+
     glClearColor(0.01f, 0.01f, 0.01f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
 
 void PostProcessor::EndRender() {
-    // 1. Resolve MSAA: Blit MSFBO -> FBO
+    // ---------------------------------------------------------
+    // RESOLVE: Blit (Copy) MSFBO -> FBO
+    // This averages the pixels and removes jagged edges
+    // ---------------------------------------------------------
     glBindFramebuffer(GL_READ_FRAMEBUFFER, MSFBO);
     glBindFramebuffer(GL_DRAW_FRAMEBUFFER, FBO);
     glBlitFramebuffer(0, 0, m_Width, m_Height, 0, 0, m_Width, m_Height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
 
-    // 2. Bind default framebuffer (the screen)
+    // ---------------------------------------------------------
+    // DRAW: Render the resolved texture to the screen
+    // ---------------------------------------------------------
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_DEPTH_TEST); // Disable depth so quad draws over everything
     glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    // 3. Draw Quad using the resolved texture
     screenShader.Use();
     screenShader.SetInt("screenTexture", 0);
     screenShader.SetFloat("time", m_Time);
@@ -103,12 +119,13 @@ void PostProcessor::EndRender() {
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, TCB);
     glDrawArrays(GL_TRIANGLES, 0, 6);
+
     glBindVertexArray(0);
 }
 
 void PostProcessor::InitRenderData() {
-    // (Same as your original code)
     float quadVertices[] = {
+        // positions   // texCoords
         -1.0f,  1.0f,  0.0f, 1.0f,
         -1.0f, -1.0f,  0.0f, 0.0f,
          1.0f, -1.0f,  1.0f, 0.0f,

@@ -75,7 +75,12 @@ void Player::Update(float dt, const Map& map, AudioManager& audio) {
     }
 
     // 2. MOVEMENT
-    float targetSpeed = m_IsSprinting ? RUN_SPEED : WALK_SPEED;
+    // CHANGED: Explicitly set speeds here to ensure they are faster/smoother
+    // overriding the header macros for now.
+    float runSpeed = 5.5f;  // Faster sprint
+    float walkSpeed = 2.5f; // Standard walk
+    float targetSpeed = m_IsSprinting ? runSpeed : walkSpeed;
+
     glm::vec3 inputDir(0.0f);
     glm::vec3 flatFront = glm::normalize(glm::vec3(m_Front.x, 0.0f, m_Front.z));
     glm::vec3 flatRight = glm::normalize(glm::vec3(m_Right.x, 0.0f, m_Right.z));
@@ -99,7 +104,8 @@ void Player::Update(float dt, const Map& map, AudioManager& audio) {
         m_Velocity.x = 0.0f;
         m_Velocity.z = 0.0f;
     } else {
-        float smoothFactor = (glm::length(inputDir) > 0.01f) ? 10.0f : 10.0f;
+        // Slightly tighter control (10.0f -> 12.0f)
+        float smoothFactor = (glm::length(inputDir) > 0.01f) ? 12.0f : 10.0f;
         m_Velocity.x += (m_TargetVelocity.x - m_Velocity.x) * smoothFactor * dt;
         m_Velocity.z += (m_TargetVelocity.z - m_Velocity.z) * smoothFactor * dt;
     }
@@ -204,8 +210,8 @@ void Player::ProcessMouseLook(const sf::Window& window) {
     sf::Vector2u size = window.getSize();
     sf::Vector2i center(size.x / 2, size.y / 2);
 
-    // SENSITIVITY FIX: Reduced by 30% (0.1 -> 0.07)
-    float sensitivity = 0.07f;
+    // CHANGED: Sensitivity greatly reduced (0.07 -> 0.02)
+    float sensitivity = 0.02f;
     float xOffset = static_cast<float>(mousePos.x - center.x) * sensitivity;
     float yOffset = static_cast<float>(center.y - mousePos.y) * sensitivity;
 

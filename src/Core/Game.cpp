@@ -16,12 +16,12 @@ Game::Game()
     settings.depthBits = 24;
     settings.majorVersion = 3;
     settings.minorVersion = 3;
-    settings.antiAliasingLevel = 4; // ADD THIS LINE (4x MSAA)
+    settings.antiAliasingLevel = 8; // CHANGED: 8x MSAA for smoother edges
     settings.attributeFlags = sf::ContextSettings::Default;
 
     sf::VideoMode desktop = sf::VideoMode::getDesktopMode();
-    m_Window.create(desktop, "3D Maze - The Bureaucracy", sf::Style::Default, sf::State::Fullscreen, settings);
-    m_Window.setFramerateLimit(144);
+    m_Window.create(desktop, "3D Maze - Mahmoud Mamdouh", sf::Style::Default, sf::State::Fullscreen, settings);
+    m_Window.setFramerateLimit(165); // CHANGED: Match 165Hz monitor
     m_Window.setMouseCursorVisible(true);
 
     std::random_device rd;
@@ -251,6 +251,7 @@ void Game::Update(float dt) {
         }
     }
 }
+
 void Game::Render() {
     sf::Vector2u windowSize = m_Window.getSize();
 
@@ -273,7 +274,6 @@ void Game::Render() {
 
         glm::mat4 view = m_Player->GetViewMatrix();
 
-        // Flashlight flicker logic
         float flashInt = (m_Player->IsFlashlightOn() && m_Player->GetBattery() > 0.0f) ? 1.0f : 0.0f;
         std::uniform_real_distribution<float> dist(0.0f, 1.0f);
         if (m_Player->GetBattery() < 20.0f) flashInt *= (dist(m_RNG) > 0.9f ? 0.2f : 1.0f);
@@ -284,7 +284,7 @@ void Game::Render() {
         m_InstancedShader->SetMat4("view", view);
         m_InstancedShader->SetVec3("viewPos", m_Player->GetPosition());
 
-        // Spotlight uniforms (Instanced)
+        // ADJUSTMENT: Brighter Ambient and Stronger Diffuse
         m_InstancedShader->SetVec3("spotLight.position", m_Player->GetFlashlightPosition());
         m_InstancedShader->SetVec3("spotLight.direction", m_Player->GetFront());
         m_InstancedShader->SetFloat("spotLight.cutOff", std::cos(glm::radians(12.5f)));
@@ -292,8 +292,9 @@ void Game::Render() {
         m_InstancedShader->SetFloat("spotLight.constant", 1.0f);
         m_InstancedShader->SetFloat("spotLight.linear", 0.045f);
         m_InstancedShader->SetFloat("spotLight.quadratic", 0.0075f);
-        m_InstancedShader->SetVec3("spotLight.ambient", glm::vec3(0.005f));
-        m_InstancedShader->SetVec3("spotLight.diffuse", glm::vec3(1.0f, 0.95f, 0.8f));
+        // CHANGE THESE 3 LINES:
+        m_InstancedShader->SetVec3("spotLight.ambient", glm::vec3(0.01f, 0.01f, 0.02f)); // Was 0.005f
+        m_InstancedShader->SetVec3("spotLight.diffuse", glm::vec3(2.5f, 2.4f, 2.0f));    // Was 1.0f
         m_InstancedShader->SetVec3("spotLight.specular", glm::vec3(1.0f));
         m_InstancedShader->SetFloat("batteryRatio", flashInt);
         m_InstancedShader->SetFloat("flicker", 1.0f);
@@ -306,7 +307,6 @@ void Game::Render() {
         m_Shader->SetMat4("view", view);
         m_Shader->SetVec3("viewPos", m_Player->GetPosition());
 
-        // Spotlight uniforms (Standard)
         m_Shader->SetVec3("spotLight.position", m_Player->GetFlashlightPosition());
         m_Shader->SetVec3("spotLight.direction", m_Player->GetFront());
         m_Shader->SetFloat("spotLight.cutOff", std::cos(glm::radians(12.5f)));
@@ -314,8 +314,8 @@ void Game::Render() {
         m_Shader->SetFloat("spotLight.constant", 1.0f);
         m_Shader->SetFloat("spotLight.linear", 0.045f);
         m_Shader->SetFloat("spotLight.quadratic", 0.0075f);
-        m_Shader->SetVec3("spotLight.ambient", glm::vec3(0.005f));
-        m_Shader->SetVec3("spotLight.diffuse", glm::vec3(1.0f, 0.95f, 0.8f));
+        m_Shader->SetVec3("spotLight.ambient", glm::vec3(0.01f, 0.01f, 0.02f)); // Was 0.005f
+        m_Shader->SetVec3("spotLight.diffuse", glm::vec3(2.5f, 2.4f, 2.0f));    // Was 1.0f
         m_Shader->SetVec3("spotLight.specular", glm::vec3(1.0f));
         m_Shader->SetFloat("batteryRatio", flashInt);
         m_Shader->SetFloat("flicker", 1.0f);
@@ -326,28 +326,24 @@ void Game::Render() {
                 int tile = m_Map->GetTile(x, z);
 
                 if (tile == 0 || tile == 3 || tile == 4 || tile == 9) {
-                    // Draw Floor
                     glm::mat4 model = glm::mat4(1.0f);
                     model = glm::translate(model, glm::vec3(x + 0.5f, -0.5f, z + 0.5f));
                     m_Renderer->DrawCube(*m_Shader, model, m_FloorTex);
 
-                    // Draw Ceiling (FIXED GAP HERE)
                     model = glm::mat4(1.0f);
-                    // CHANGED FROM 4.5f TO 4.0f to match wall height
+                    // FIXED GAP: Lowered Ceiling from 4.5f to 4.0f
                     model = glm::translate(model, glm::vec3(x + 0.5f, 4.0f, z + 0.5f));
                     model = glm::rotate(model, glm::radians(180.0f), glm::vec3(1.0f, 0.0f, 0.0f));
                     m_Renderer->DrawCube(*m_Shader, model, m_CeilingTex);
                 }
 
                 if (tile == 2 || tile == 5) {
-                    // Draw Doors
                     unsigned int tex = (tile == 2) ? m_DoorTex : m_LockedDoorTex;
                     glm::mat4 model = glm::mat4(1.0f);
                     model = glm::translate(model, glm::vec3(x + 0.5f, 0.75f, z + 0.5f));
                     model = glm::scale(model, glm::vec3(1.0f, 2.5f, 1.0f));
                     m_Renderer->DrawCube(*m_Shader, model, tex);
 
-                    // Door Frame/Lintel
                     model = glm::mat4(1.0f);
                     model = glm::translate(model, glm::vec3(x + 0.5f, 2.75f, z + 0.5f));
                     model = glm::scale(model, glm::vec3(1.0f, 1.5f, 1.0f));
@@ -355,7 +351,6 @@ void Game::Render() {
                 }
 
                 if (tile == 4) {
-                    // Draw Key (Floating Animation)
                     m_Shader->SetBool("isUnlit", true);
                     glm::mat4 model = glm::mat4(1.0f);
                     float floatY = 0.5f + std::sin(m_GameTime.getElapsedTime().asSeconds() * 2.0f) * 0.1f;
@@ -368,7 +363,6 @@ void Game::Render() {
             }
         }
 
-        // Draw Paper Objective
         glm::mat4 model = glm::mat4(1.0f);
         float floatY = m_PaperPos.y + std::sin(m_GameTime.getElapsedTime().asSeconds() * 2.0f) * 0.1f;
         model = glm::translate(model, glm::vec3(m_PaperPos.x, floatY, m_PaperPos.z));
@@ -376,16 +370,13 @@ void Game::Render() {
         m_Renderer->DrawCube(*m_Shader, model, m_PaperTex);
     }
 
-    // Unbind VAO/Program
     glBindVertexArray(0);
     glUseProgram(0);
 
-    // 3. Finalize Post-Processing (Resolve MSAA & Draw to Screen)
     if (usePostProcessing) {
         m_PostProcessor->EndRender();
     }
 
-    // 4. Draw UI on top
     RenderUI();
     m_Window.display();
 }
@@ -397,7 +388,7 @@ void Game::RenderUI() {
     float centerY = windowSize.y / 2.0f;
 
     if (m_State == GameState::MENU) {
-        m_UIText.setString("3d-maze-explorer \"By Mahmoud Mamdouh\"\n\n\nCONTROLS:\n\n\n[WASD] Move\n\n\n[F] Light\n\n\n[E] Interact\n\n\nPRESS ENTER");
+        m_UIText.setString("3d-maze-explorer \"By Mahmoud Mamdouh\"\n\n\nCONTROLS:\n\n\n[WASD] Move\n\n\n[F] Toggle Light\n\n\n[E] Open Locked Doors\n\n\nPRESS ENTER to Play");
         sf::FloatRect bounds = m_UIText.getLocalBounds();
         m_UIText.setPosition({centerX - bounds.size.x/2, centerY - bounds.size.y/2});
         m_Window.draw(m_UIText);
@@ -444,7 +435,8 @@ void Game::RenderUI() {
 
         float barWidth = 200.0f;
         float barHeight = 20.0f;
-        sf::Vector2f barPos(20.0f, static_cast<float>(windowSize.y) - barHeight - 40.0f);
+        // ADJUSTMENT: Moved HUD higher (from -40.0f to -80.0f)
+        sf::Vector2f barPos(20.0f, static_cast<float>(windowSize.y) - barHeight - 80.0f);
 
         sf::RectangleShape backBar(sf::Vector2f(barWidth, barHeight));
         backBar.setPosition(barPos);
@@ -464,10 +456,18 @@ void Game::RenderUI() {
         m_UIText.setString("FLASHLIGHT [F]");
         m_UIText.setPosition({barPos.x, barPos.y - 30.0f});
         m_UIText.setScale({0.8f, 0.8f});
+        m_UIText.setFillColor(sf::Color::White);
         m_Window.draw(m_UIText);
 
         sf::Vector2f stamPos = barPos;
-        stamPos.y += 30.0f;
+        stamPos.y += 35.0f; // Adjusted spacing
+
+        // NEW: Add "STAMINA" label above bar
+        m_UIText.setString("STAMINA");
+        m_UIText.setPosition({stamPos.x, stamPos.y - 25.0f});
+        m_UIText.setScale({0.6f, 0.6f});
+        m_UIText.setFillColor(sf::Color::Cyan);
+        m_Window.draw(m_UIText);
 
         sf::RectangleShape backStam(sf::Vector2f(barWidth, 10.0f));
         backStam.setPosition(stamPos);
@@ -479,6 +479,10 @@ void Game::RenderUI() {
         frontStam.setPosition(stamPos);
         frontStam.setFillColor(sf::Color::Cyan);
         m_Window.draw(frontStam);
+
+        // Reset Text Settings for other draws
+        m_UIText.setScale({1.0f, 1.0f});
+        m_UIText.setFillColor(sf::Color::White);
 
         if (m_Player->HasRedKey()) {
              sf::RectangleShape keyIcon(sf::Vector2f(30.0f, 40.0f));
@@ -496,13 +500,13 @@ void Game::RenderUI() {
         }
     }
     else if (m_State == GameState::GAME_OVER) {
-        m_CenterText.setString("LIGHTS OUT.\nPress ENTER to Retry");
+        m_CenterText.setString("LIGHTS OUT.\n\n\nPress ENTER to Retry");
         sf::FloatRect bounds = m_CenterText.getLocalBounds();
         m_CenterText.setPosition({centerX - bounds.size.x/2, centerY - bounds.size.y/2});
         m_Window.draw(m_CenterText);
     }
     else if (m_State == GameState::WIN) {
-        m_CenterText.setString("FORM SUBMITTED.\nPress ENTER to Continue");
+        m_CenterText.setString("FORM SUBMITTED.\n\n\nPress ENTER to Continue");
         sf::FloatRect bounds = m_CenterText.getLocalBounds();
         m_CenterText.setPosition({centerX - bounds.size.x/2, centerY - bounds.size.y/2});
         m_Window.draw(m_CenterText);

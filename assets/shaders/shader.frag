@@ -9,7 +9,7 @@ uniform sampler2D texture1;
 uniform vec3 viewPos;
 uniform float batteryRatio;
 uniform float flicker;
-uniform bool isUnlit; // NEW: If true, ignore lighting (for the Key/Badge)
+uniform bool isUnlit;
 
 struct SpotLight {
     vec3 position;
@@ -29,10 +29,14 @@ uniform SpotLight spotLight;
 void main() {
     vec4 texColor = texture(texture1, TexCoord);
 
-    // 1. GLOWING OBJECTS (The Key)
-    // If it's the key, we skip lighting calc and just show the texture bright
+    // 1. GLOWING OBJECTS (Key/Badge)
     if (isUnlit) {
         FragColor = texColor;
+        // Apply simple fog to unlit objects too so they don't shine through walls
+        float dist = length(viewPos - FragPos);
+        float dens = 0.09;
+        float fog = 1.0 / exp(dist * dist * dens * dens);
+        FragColor = mix(vec4(0.0, 0.0, 0.0, 1.0), FragColor, clamp(fog, 0.0, 1.0));
         return;
     }
 
@@ -40,7 +44,7 @@ void main() {
     vec3 norm = normalize(Normal);
     vec3 lightDir = normalize(spotLight.position - FragPos);
 
-    // Soft Edge Spotlight
+    // Spotlight Soft Edge
     float theta = dot(lightDir, normalize(-spotLight.direction));
     float epsilon = spotLight.cutOff - spotLight.outerCutOff;
     float intensity = clamp((theta - spotLight.outerCutOff) / epsilon, 0.0, 1.0);
@@ -51,12 +55,10 @@ void main() {
 
     // Battery & Flicker
     float powerFactor = clamp(batteryRatio, 0.0, 1.0);
-    if (batteryRatio < 0.2) {
-        powerFactor *= flicker;
-    }
+    if (batteryRatio < 0.2) powerFactor *= flicker;
 
-    // DARKER AMBIENT: 0.002 is "Barely Seeable"
-    vec3 ambient = vec3(0.002) * texColor.rgb;
+    // Lighting Components
+    vec3 ambient = spotLight.ambient * texColor.rgb;
 
     float diff = max(dot(norm, lightDir), 0.0);
     vec3 diffuse = spotLight.diffuse * diff * texColor.rgb;
@@ -68,11 +70,16 @@ void main() {
 
     vec3 result = ambient + (diffuse + specular) * intensity * attenuation * powerFactor;
 
-    // FOG (Pitch Black Void)
-    float fogStart = 1.0;
-    float fogEnd = 8.0;
-    float fogFactor = clamp((distance - fogStart) / (fogEnd - fogStart), 0.0, 1.0);
-    vec3 fogColor = vec3(0.0); // Pure black fog
+    // --- CINEMATIC FOG UPGRADE ---
+    // Old: Linear "Wall of Black" at 8 meters
+    // New: Exponential "Thick Mist" that surrounds you
+    float fogDistance = length(viewPos - FragPos);
+    float fogDensity = 0.09; // Thickness of the fog
+    float fogFactor = 1.0 / exp(fogDistance * fogDistance * fogDensity * fogDensity);
+    fogFactor = clamp(fogFactor, 0.0, 1.0);
 
-    FragColor = vec4(mix(result, fogColor, fogFactor), 1.0);
+    // Mix result with a dark blue/black atmosphere color
+    vec3 atmosphereColor = vec3(0.005, 0.005, 0.01);
+
+    FragColor = vec4(mix(atmosphereColor, result, fogFactor), 1.0);
 }

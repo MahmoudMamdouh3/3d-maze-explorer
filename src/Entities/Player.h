@@ -60,7 +60,7 @@ private:
 
     // Constants (AAA Tuning)
     const float WALK_SPEED = 2.5f;
-    const float RUN_SPEED = 5.5f;
+    const float RUN_SPEED = 3.8f;
     const float GRAVITY = 22.0f;      // NEW: Higher gravity = Snappier jump (Less floaty)
     const float JUMP_FORCE = 7.0f;    // Adjusted for new gravity
     const float PLAYER_HEIGHT = 1.9f; // NEW: Taller (+20cm)

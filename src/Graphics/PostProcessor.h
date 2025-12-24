@@ -8,26 +8,22 @@ public:
     PostProcessor(int width, int height);
     ~PostProcessor();
 
-    // Call this BEFORE rendering the 3D game
+    void Resize(int width, int height);
+    void Update(float dt);
     void BeginRender();
-
-    // Call this AFTER rendering the 3D game (draws the screen quad)
     void EndRender();
 
-    // Update screen size if window resizes
-    void Resize(int width, int height);
-
-    // Update time for grain animation
-    void Update(float dt);
-
 private:
-    unsigned int FBO;       // Framebuffer Object
-    unsigned int TCB;       // Texture Color Buffer
-    unsigned int RBO;       // Render Buffer Object (Depth)
-    unsigned int rectVAO, rectVBO;
+    void InitRenderData();
 
     Shader screenShader;
-    float m_Time;
+    unsigned int MSFBO; // Multisampled Framebuffer (New)
+    unsigned int MSRBO; // Multisampled Renderbuffer (New)
 
-    void InitRenderData();
+    unsigned int FBO;   // Intermediate Framebuffer (Existing)
+    unsigned int TCB;   // Texture Color Buffer (Existing)
+
+    unsigned int rectVAO, rectVBO;
+    float m_Time;
+    int m_Width, m_Height; // Store dimensions for resizing
 };

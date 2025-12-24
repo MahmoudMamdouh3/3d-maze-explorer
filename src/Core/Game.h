@@ -1,16 +1,25 @@
 #pragma once
+#include <glad/glad.h>
+#include <SFML/Window.hpp>
 #include <SFML/Graphics.hpp>
+#include <SFML/Audio.hpp>
 #include <memory>
-#include <vector>
-#include <random> // NEW: For modern randomness
+#include <random>
+
 #include "../Graphics/Shader.h"
 #include "../Graphics/Renderer.h"
 #include "../Entities/Player.h"
 #include "../Entities/Map.h"
-#include "../Core/AudioManager.h"
+#include "AudioManager.h"
 #include "../Graphics/PostProcessor.h"
 
-enum class GameState { MENU, PLAYING, PAUSED, GAME_OVER, WIN };
+enum class GameState {
+    MENU,
+    PLAYING,
+    PAUSED,
+    GAME_OVER,
+    WIN
+};
 
 class Game {
 public:
@@ -20,52 +29,39 @@ public:
     void Run();
 
 private:
-    // Core Loop
     void ProcessEvents();
     void Update(float dt);
     void Render();
     void RenderUI();
-
-    // Helpers
     void ResetGame();
 
-    // Window & State
     sf::RenderWindow m_Window;
-    GameState m_State;
     sf::Clock m_DeltaClock;
     sf::Clock m_GameTime;
+    GameState m_State;
+    std::mt19937 m_RNG;
 
-    // Subsystems
-    std::unique_ptr<Player> m_Player;
-    std::unique_ptr<Map> m_Map;
-    std::unique_ptr<Shader> m_Shader;          // Standard Shader (Objects)
-    std::unique_ptr<Shader> m_InstancedShader; // Optimized Shader (Walls)
+    std::unique_ptr<Shader> m_Shader;
+    std::unique_ptr<Shader> m_InstancedShader;
     std::unique_ptr<Renderer> m_Renderer;
     std::unique_ptr<AudioManager> m_Audio;
     std::unique_ptr<PostProcessor> m_PostProcessor;
 
-    // Resources
-    unsigned int m_FloorTex;
-    unsigned int m_WallTex;
-    unsigned int m_CeilingTex;
-    unsigned int m_PaperTex;
-    unsigned int m_DoorTex;
-    unsigned int m_LockedDoorTex; // <--- For the red door
-    unsigned int m_KeyTex;        // <--- For the keycard
+    std::unique_ptr<Map> m_Map;
+    std::unique_ptr<Player> m_Player;
 
-    // Data for Rendering
+    unsigned int m_FloorTex, m_WallTex, m_CeilingTex;
+    unsigned int m_PaperTex, m_DoorTex, m_LockedDoorTex, m_KeyTex;
     std::vector<glm::mat4> m_WallTransforms;
 
-    // Gameplay Data (Initialized to zero to satisfy Clang-Tidy)
-    glm::vec3 m_PaperPos{0.0f};
-    glm::vec3 m_PlayerStartPos{0.0f};
+    glm::vec3 m_PlayerStartPos;
+    glm::vec3 m_PaperPos;
 
-    // UI Resources
     sf::Font m_Font;
     sf::Text m_UIText;
     sf::Text m_CenterText;
     sf::Text m_InteractText;
 
-    // Randomness (Fixes Clang-Tidy rand() warning)
-    std::mt19937 m_RNG;
+    int m_PauseMenuSelection;
+    bool m_AudioStopped;
 };

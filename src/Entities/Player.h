@@ -9,25 +9,24 @@ class Player {
 public:
     Player(glm::vec3 startPos);
 
-    void HandleInput(const sf::Window& window, float dt); // Added dt here for toggle timers
+    void HandleInput(const sf::Window& window, float dt, AudioManager& audio);
     void Update(float dt, const Map& map, AudioManager& audio);
     void Reset(glm::vec3 startPos);
 
     // Getters
     glm::vec3 GetPosition() const { return m_Position; }
+    glm::vec3 GetEyePosition() const;
     glm::vec3 GetFront() const { return m_Front; }
     glm::mat4 GetViewMatrix() const;
     glm::vec3 GetFlashlightPosition() const;
 
-    // New Getters
     float GetBattery() const { return m_Battery; }
-    float GetStamina() const { return m_Stamina; } // New
-    bool IsFlashlightOn() const { return m_IsFlashlightOn; } // New
+    float GetStamina() const { return m_Stamina; }
+    bool IsFlashlightOn() const { return m_IsFlashlightOn; }
     bool HasRedKey() const { return m_HasRedKey; }
     float GetCurrentFOV() const { return m_CurrentFOV; }
     bool IsDead() const { return m_Battery <= 0.0f; }
 
-    // Setters
     void PickUpRedKey() { m_HasRedKey = true; }
 
 private:
@@ -45,25 +44,29 @@ private:
     glm::vec3 m_TargetVelocity;
     bool m_IsGrounded;
     bool m_IsSprinting;
+    bool m_IsFatigued; // NEW: Prevents running if stamina hit 0
 
     // Gameplay Attributes
     float m_Battery;
-    float m_Stamina;          // New: 0.0 to 100.0
-    bool  m_IsFlashlightOn;   // New: Toggle state
+    float m_Stamina;
+    bool  m_IsFlashlightOn;
     bool  m_HasRedKey;
-    float m_FlashlightToggleTimer; // Prevent spamming 'F'
+    float m_FlashlightToggleTimer;
 
-    // Animation / Feel
+    // Animation
     float m_HeadBobTimer;
     float m_FootstepTimer;
-    float m_BreathingTimer;   // New: For breathing sfx
+    float m_BreathingTimer;
 
-    // Constants
+    // Constants (AAA Tuning)
     const float WALK_SPEED = 2.5f;
-    const float RUN_SPEED = 5.0f;
-    const float GRAVITY = 9.8f;
-    const float PLAYER_HEIGHT = 1.7f;
+    const float RUN_SPEED = 5.5f;
+    const float GRAVITY = 22.0f;      // NEW: Higher gravity = Snappier jump (Less floaty)
+    const float JUMP_FORCE = 7.0f;    // Adjusted for new gravity
+    const float PLAYER_HEIGHT = 1.9f; // NEW: Taller (+20cm)
     const float PLAYER_RADIUS = 0.3f;
     const float MAX_BATTERY = 180.0f;
     const float MAX_STAMINA = 100.0f;
+    const float CEILING_HEIGHT = 4.0f; // Visual ceiling match
+    const float BASE_FOV = 60.0f;      // NEW: Wider base FOV
 };

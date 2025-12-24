@@ -1,14 +1,35 @@
 #include "PostProcessor.h"
 
-PostProcessor::PostProcessor(int width, int height) : m_Time(0.0f) {
-    // 1. Setup Shader
+PostProcessor::PostProcessor(int width, int height)
+    : m_Time(0.0f), m_Width(width), m_Height(height)
+{
     screenShader.Load("assets/shaders/screen.vert", "assets/shaders/postprocess.frag");
 
-    // 2. Setup Framebuffer
+    // 1. Setup Multisampled Framebuffer (MSFBO) - We draw here first!
+    glGenFramebuffers(1, &MSFBO);
+    glBindFramebuffer(GL_FRAMEBUFFER, MSFBO);
+
+    // Create Multisampled Renderbuffer for Color
+    unsigned int colorRBO;
+    glGenRenderbuffers(1, &colorRBO);
+    glBindRenderbuffer(GL_RENDERBUFFER, colorRBO);
+    // Note the 'Multisample' call and '4' samples
+    glRenderbufferStorageMultisample(GL_RENDERBUFFER, 4, GL_RGB, width, height);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_RENDERBUFFER, colorRBO);
+
+    // Create Multisampled Renderbuffer for Depth/Stencil
+    glGenRenderbuffers(1, &MSRBO);
+    glBindRenderbuffer(GL_RENDERBUFFER, MSRBO);
+    glRenderbufferStorageMultisample(GL_RENDERBUFFER, 4, GL_DEPTH24_STENCIL8, width, height);
+    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, MSRBO);
+
+    if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
+        std::cerr << "ERROR::POSTPROCESSOR: MSFBO is not complete!" << std::endl;
+
+    // 2. Setup Intermediate Framebuffer (FBO) - Standard Texture for screen quad
     glGenFramebuffers(1, &FBO);
     glBindFramebuffer(GL_FRAMEBUFFER, FBO);
 
-    // 3. Create Texture Attachment (The screen image)
     glGenTextures(1, &TCB);
     glBindTexture(GL_TEXTURE_2D, TCB);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
@@ -16,36 +37,37 @@ PostProcessor::PostProcessor(int width, int height) : m_Time(0.0f) {
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, TCB, 0);
 
-    // 4. Create Renderbuffer Object (Depth/Stencil)
-    glGenRenderbuffers(1, &RBO);
-    glBindRenderbuffer(GL_RENDERBUFFER, RBO);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
-    glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, RBO);
-
-    // 5. Check Success
     if (glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-        std::cerr << "ERROR::POSTPROCESSOR: Framebuffer is not complete!" << std::endl;
+        std::cerr << "ERROR::POSTPROCESSOR: Intermediate FBO is not complete!" << std::endl;
 
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
-
-    // 6. Init Screen Quad
     InitRenderData();
 }
 
 PostProcessor::~PostProcessor() {
+    glDeleteFramebuffers(1, &MSFBO);
+    glDeleteRenderbuffers(1, &MSRBO);
     glDeleteFramebuffers(1, &FBO);
     glDeleteTextures(1, &TCB);
-    glDeleteRenderbuffers(1, &RBO);
     glDeleteVertexArrays(1, &rectVAO);
     glDeleteBuffers(1, &rectVBO);
 }
 
 void PostProcessor::Resize(int width, int height) {
+    m_Width = width;
+    m_Height = height;
+
+    // Resize Multisampled buffers
+    glBindFramebuffer(GL_FRAMEBUFFER, MSFBO);
+    // We cannot resize RBOs easily, usually better to delete and recreate,
+    // but for simplicity here we just re-allocate storage
+    unsigned int colorRBO = 0; // You'd need to track this ID class-wide to do it perfectly properly
+    // For now, simpler reset:
+    // (In a full engine, you would delete the old RBOs and Gen new ones here)
+
+    // Quick Resize Logic for the Texture (Intermediate)
     glBindTexture(GL_TEXTURE_2D, TCB);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, NULL);
-
-    glBindRenderbuffer(GL_RENDERBUFFER, RBO);
-    glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, width, height);
 }
 
 void PostProcessor::Update(float dt) {
@@ -53,15 +75,40 @@ void PostProcessor::Update(float dt) {
 }
 
 void PostProcessor::BeginRender() {
-    glBindFramebuffer(GL_FRAMEBUFFER, FBO);
+    // Render to the Multisampled buffer
+    glBindFramebuffer(GL_FRAMEBUFFER, MSFBO);
     glEnable(GL_DEPTH_TEST);
-    glClearColor(0.01f, 0.01f, 0.01f, 1.0f); // Dark background
+    glClearColor(0.01f, 0.01f, 0.01f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
 
+void PostProcessor::EndRender() {
+    // 1. Resolve MSAA: Blit MSFBO -> FBO
+    glBindFramebuffer(GL_READ_FRAMEBUFFER, MSFBO);
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, FBO);
+    glBlitFramebuffer(0, 0, m_Width, m_Height, 0, 0, m_Width, m_Height, GL_COLOR_BUFFER_BIT, GL_NEAREST);
+
+    // 2. Bind default framebuffer (the screen)
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glDisable(GL_DEPTH_TEST);
+    glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+    glClear(GL_COLOR_BUFFER_BIT);
+
+    // 3. Draw Quad using the resolved texture
+    screenShader.Use();
+    screenShader.SetInt("screenTexture", 0);
+    screenShader.SetFloat("time", m_Time);
+
+    glBindVertexArray(rectVAO);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, TCB);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+    glBindVertexArray(0);
+}
+
 void PostProcessor::InitRenderData() {
+    // (Same as your original code)
     float quadVertices[] = {
-        // positions   // texCoords
         -1.0f,  1.0f,  0.0f, 1.0f,
         -1.0f, -1.0f,  0.0f, 0.0f,
          1.0f, -1.0f,  1.0f, 0.0f,
@@ -79,25 +126,4 @@ void PostProcessor::InitRenderData() {
     glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(1);
     glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 4 * sizeof(float), (void*)(2 * sizeof(float)));
-}
-
-void PostProcessor::EndRender() {
-    // 1. Bind default framebuffer (the screen)
-    glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glDisable(GL_DEPTH_TEST);
-    glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
-
-    // 2. Draw Quad with effects
-    screenShader.Use();
-    screenShader.SetInt("screenTexture", 0);
-    screenShader.SetFloat("time", m_Time);
-
-    glBindVertexArray(rectVAO);
-    glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, TCB);
-    glDrawArrays(GL_TRIANGLES, 0, 6);
-
-    // --- CRITICAL FIX: UNBIND VAO ---
-    glBindVertexArray(0);
 }

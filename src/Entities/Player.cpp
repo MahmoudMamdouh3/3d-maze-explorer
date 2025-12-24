@@ -6,10 +6,11 @@
 #include <glm/gtc/matrix_transform.hpp>
 
 Player::Player(glm::vec3 startPos)
-    : m_Position(startPos), m_Velocity(0.0f), m_WorldUp(0.0f, 1.0f, 0.0f),
-      m_Yaw(-90.0f), m_Pitch(0.0f), m_Battery(MAX_BATTERY),
-      m_IsGrounded(false), m_HeadBobTimer(0.0f), m_IsSprinting(false),
-      m_FootstepTimer(0.0f)
+    : m_Position(startPos), m_Velocity(0.0f), m_TargetVelocity(0.0f),
+      m_WorldUp(0.0f, 1.0f, 0.0f), m_Yaw(-90.0f), m_Pitch(0.0f),
+      m_Battery(MAX_BATTERY), m_IsGrounded(false), m_HasRedKey(false),
+      m_HeadBobTimer(0.0f), m_IsSprinting(false), m_FootstepTimer(0.0f),
+      m_CurrentFOV(BASE_FOV) // <--- Init FOV
 {
     UpdateCameraVectors();
 }
@@ -36,10 +37,9 @@ void Player::HandleInput(const sf::Window& window) {
         m_Velocity.y = JUMP_FORCE;
         m_IsGrounded = false;
     }
-}
-void Player::Update(float dt, const Map& map, AudioManager& audio) {
-    // --- 1. Movement Input & Audio ---
-    float speed = m_IsSprinting ? RUN_SPEED : WALK_SPEED;
+}void Player::Update(float dt, const Map& map, AudioManager& audio) {
+    // --- A. INPUT & TARGET VELOCITY ---
+    float targetSpeed = m_IsSprinting ? RUN_SPEED : WALK_SPEED;
     glm::vec3 inputDir(0.0f);
 
     glm::vec3 flatFront = glm::normalize(glm::vec3(m_Front.x, 0.0f, m_Front.z));
@@ -52,100 +52,97 @@ void Player::Update(float dt, const Map& map, AudioManager& audio) {
 
     if (glm::length(inputDir) > 0.01f) {
         inputDir = glm::normalize(inputDir);
-        float bobSpeed = speed * 5.0f;
-        m_HeadBobTimer += dt * bobSpeed;
+        m_TargetVelocity.x = inputDir.x * targetSpeed;
+        m_TargetVelocity.z = inputDir.z * targetSpeed;
+    } else {
+        m_TargetVelocity.x = 0.0f;
+        m_TargetVelocity.z = 0.0f;
+    }
 
-        if (m_IsGrounded) {
-             float stepInterval = m_IsSprinting ? 0.3f : 0.5f;
-             m_FootstepTimer -= dt;
-             if (m_FootstepTimer <= 0.0f) {
-                 audio.PlayGlobal("footstep", 40.0f);
-                 m_FootstepTimer = stepInterval;
-             }
+    // --- B. PHYSICS: ACCELERATION & FRICTION (THE MOMENTUM) ---
+    // Smoothly interpolate current velocity towards target velocity
+    // This gives the "weighty" feeling.
+    float smoothFactor = (glm::length(inputDir) > 0.01f) ? ACCELERATION : FRICTION;
+
+    m_Velocity.x += (m_TargetVelocity.x - m_Velocity.x) * smoothFactor * dt;
+    m_Velocity.z += (m_TargetVelocity.z - m_Velocity.z) * smoothFactor * dt;
+
+    // --- C. DYNAMIC FOV ---
+    // If moving fast, zoom out. If stopped, zoom in.
+    float horizontalSpeed = glm::length(glm::vec2(m_Velocity.x, m_Velocity.z));
+    float targetFOV = BASE_FOV + (horizontalSpeed / RUN_SPEED) * (SPRINT_FOV - BASE_FOV);
+    // Smoothly change FOV (Lerp)
+    m_CurrentFOV += (targetFOV - m_CurrentFOV) * 5.0f * dt;
+
+    // --- D. HEAD BOB & FOOTSTEPS ---
+    if (m_IsGrounded && horizontalSpeed > 0.1f) {
+        // Bob speed depends on how fast we are actually moving
+        m_HeadBobTimer += dt * horizontalSpeed * 2.5f;
+
+        float stepInterval = m_IsSprinting ? 0.35f : 0.55f;
+        m_FootstepTimer -= dt;
+        if (m_FootstepTimer <= 0.0f) {
+            audio.PlayGlobal("footstep", 30.0f + (horizontalSpeed * 5.0f)); // Louder when running
+            m_FootstepTimer = stepInterval;
         }
     } else {
+        // Reset bob when stopped (optional, or let it settle)
         m_HeadBobTimer = 0.0f;
         m_FootstepTimer = 0.0f;
     }
 
-    // --- 2. Physics Setup ---
-    // Prevent "Tunneling" by capping the physics step.
-    // If lag spikes (dt > 0.05), we process physics in smaller safe chunks.
+    // --- E. PHYSICS & COLLISION ---
     float timeRemaining = dt;
-    const float MAX_STEP = 0.02f; // Run physics at ~50Hz precision minimum
+    const float MAX_STEP = 0.016f;
 
     while (timeRemaining > 0.0f) {
         float step = std::min(timeRemaining, MAX_STEP);
 
-        // Apply Gravity
+        // Gravity
         m_Velocity.y -= GRAVITY * step;
 
-        // Calculate Movement for this small step
-        glm::vec3 stepMove = inputDir * speed * step;
-
-        // --- PHASE A: MOVE X AXIS ---
-        m_Position.x += stepMove.x;
-
-        // Check Wall Collisions (X Only)
-        // We create a box at the NEW X but OLD Z (Separated Axis)
-        AABB playerBoxX(m_Position, glm::vec3(PLAYER_RADIUS * 2.0f, PLAYER_HEIGHT, PLAYER_RADIUS * 2.0f));
-        auto wallsX = map.GetNearbyWalls(m_Position, 2.0f);
-
-        for (const auto& originalWall : wallsX) {
-            // Ignore Y axis by stretching wall vertically
-            AABB wall = originalWall;
-            wall.min.y = playerBoxX.min.y - 5.0f;
-            wall.max.y = playerBoxX.max.y + 5.0f;
-
-            if (playerBoxX.Intersects(wall)) {
-                glm::vec3 penetration = playerBoxX.GetPenetration(wall);
-                // We just moved X, so the collision MUST be on X.
-                // Push back on X only.
-                if (m_Position.x < wall.min.x + 0.5f) m_Position.x -= penetration.x;
-                else m_Position.x += penetration.x;
-            }
-        }
-
-        // --- PHASE B: MOVE Z AXIS ---
-        m_Position.z += stepMove.z;
-
-        // Check Wall Collisions (Z Only)
-        // Now we are at Valid X, New Z.
-        AABB playerBoxZ(m_Position, glm::vec3(PLAYER_RADIUS * 2.0f, PLAYER_HEIGHT, PLAYER_RADIUS * 2.0f));
-        auto wallsZ = map.GetNearbyWalls(m_Position, 2.0f);
-
-        for (const auto& originalWall : wallsZ) {
-            AABB wall = originalWall;
-            wall.min.y = playerBoxZ.min.y - 5.0f;
-            wall.max.y = playerBoxZ.max.y + 5.0f;
-
-            if (playerBoxZ.Intersects(wall)) {
-                glm::vec3 penetration = playerBoxZ.GetPenetration(wall);
-                // We just moved Z, so the collision MUST be on Z.
-                // Push back on Z only.
-                if (m_Position.z < wall.min.z + 0.5f) m_Position.z -= penetration.z;
-                else m_Position.z += penetration.z;
-            }
-        }
-
-        // --- PHASE C: MOVE Y AXIS ---
+        // Apply Velocity to Position
+        m_Position.x += m_Velocity.x * step;
+        m_Position.z += m_Velocity.z * step;
         m_Position.y += m_Velocity.y * step;
 
-        // Floor Collision
+        // 1. Floor Check
         if (m_Position.y < -0.5f) {
             m_Position.y = -0.5f;
             m_Velocity.y = 0.0f;
             m_IsGrounded = true;
         }
 
+        // 2. Wall Collisions (Simplified Sliding)
+        // We check X and Z movement separately for proper sliding
+        auto walls = map.GetNearbyWalls(m_Position, 1.0f); // Check tighter radius
+
+        // Player Bounding Box
+        AABB playerBox(m_Position, glm::vec3(PLAYER_RADIUS * 2.0f, PLAYER_HEIGHT, PLAYER_RADIUS * 2.0f));
+
+        for (const auto& wall : walls) {
+            if (playerBox.Intersects(wall)) {
+                glm::vec3 penetration = playerBox.GetPenetration(wall);
+
+                // Push out smallest amount
+                if (std::abs(penetration.x) < std::abs(penetration.z)) {
+                    m_Position.x += penetration.x; // Resolve X
+                    m_Velocity.x = 0.0f;           // Kill X momentum (bonk)
+                } else {
+                    m_Position.z += penetration.z; // Resolve Z
+                    m_Velocity.z = 0.0f;           // Kill Z momentum (bonk)
+                }
+                // Update box for next check
+                playerBox = AABB(m_Position, glm::vec3(PLAYER_RADIUS * 2.0f, PLAYER_HEIGHT, PLAYER_RADIUS * 2.0f));
+            }
+        }
         timeRemaining -= step;
     }
 
-    // --- 3. Gameplay: Battery ---
+    // Battery Logic
     m_Battery -= dt;
     if (m_Battery < 0.0f) m_Battery = 0.0f;
 }
-
 void Player::ProcessMouseLook(const sf::Window& window) {
     if (!window.hasFocus()) return;
 

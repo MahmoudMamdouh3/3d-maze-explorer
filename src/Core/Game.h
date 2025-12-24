@@ -50,6 +50,8 @@ private:
     unsigned int m_CeilingTex;
     unsigned int m_PaperTex;
     unsigned int m_DoorTex;
+    unsigned int m_LockedDoorTex; // <--- For the red door
+    unsigned int m_KeyTex;        // <--- For the keycard
 
     // Data for Rendering
     std::vector<glm::mat4> m_WallTransforms;

@@ -2,6 +2,7 @@
 #include <fstream>
 #include <iostream>
 #include <algorithm>
+#include <cmath> // Added for round()
 
 Map::Map() : m_Width(0), m_Height(0) {}
 
@@ -37,15 +38,23 @@ bool Map::LoadLevel(const std::string& path, glm::vec3& outPlayerStart, glm::vec
                 m_Grid[index] = 1; // Wall
             }
             else if (tile == 'D') {
-                m_Grid[index] = 2; // Door (Closed) <--- NEW
+                m_Grid[index] = 2; // Normal Door (Closed)
+            }
+            else if (tile == 'K') {
+                m_Grid[index] = 4; // Red Keycard (Collectible) - NEW
+            }
+            else if (tile == 'L') {
+                m_Grid[index] = 5; // Locked Door (Needs Key) - NEW
             }
             else if (tile == 'P') {
                 m_Grid[index] = 0; // Floor
-                outPlayerStart = glm::vec3(x + 0.5f, 0.0f, z + 0.5f); // Center of tile
-            } else if (tile == 'O') {
+                outPlayerStart = glm::vec3(x + 0.5f, 0.0f, z + 0.5f);
+            }
+            else if (tile == 'O') {
                 m_Grid[index] = 0; // Floor
                 outPaperPos = glm::vec3(x + 0.5f, 0.5f, z + 0.5f);
-            } else {
+            }
+            else {
                 m_Grid[index] = 0; // Floor (.)
             }
         }
@@ -56,10 +65,17 @@ bool Map::LoadLevel(const std::string& path, glm::vec3& outPlayerStart, glm::vec
 }
 
 int Map::GetTile(int x, int z) const {
-    if (x < 0 || x >= m_Width || z < 0 || z >= m_Height) return 1;
+    if (x < 0 || x >= m_Width || z < 0 || z >= m_Height) return 1; // Return wall if out of bounds
     return m_Grid[z * m_Width + x];
 }
 
+void Map::SetTile(int x, int z, int type) {
+    if (x >= 0 && x < m_Width && z >= 0 && z < m_Height) {
+        m_Grid[z * m_Width + x] = type;
+    }
+}
+
+// UPDATED COLLISION LOGIC
 std::vector<AABB> Map::GetNearbyWalls(glm::vec3 position, float range) const {
     std::vector<AABB> walls;
 
@@ -70,7 +86,9 @@ std::vector<AABB> Map::GetNearbyWalls(glm::vec3 position, float range) const {
 
     for (int z = startZ; z <= endZ; z++) {
         for (int x = startX; x <= endX; x++) {
-            if (GetTile(x, z) == 1 || GetTile(x, z) == 2) {
+            int tile = GetTile(x, z);
+            // Collide with Walls (1), Closed Doors (2), and Locked Doors (5)
+            if (tile == 1 || tile == 2 || tile == 5) {
                 walls.emplace_back(glm::vec3(x, 1.5f, z), glm::vec3(1.0f, 4.0f, 1.0f));
             }
         }
@@ -78,17 +96,9 @@ std::vector<AABB> Map::GetNearbyWalls(glm::vec3 position, float range) const {
     return walls;
 }
 
-// ADD THIS NEW FUNCTION at the end
-void Map::SetTile(int x, int z, int type) {
-    if (x >= 0 && x < m_Width && z >= 0 && z < m_Height) {
-        m_Grid[z * m_Width + x] = type;
-    }
-}
-
 RaycastResult Map::CastRay(glm::vec3 start, glm::vec3 direction, float maxDistance) const {
     RaycastResult result = {false, 0, 0, 0, 0.0f};
 
-    // Step size: Smaller = More precise, Larger = Faster
     float stepSize = 0.1f;
     glm::vec3 currentPos = start;
     float traveled = 0.0f;
@@ -100,16 +110,14 @@ RaycastResult Map::CastRay(glm::vec3 start, glm::vec3 direction, float maxDistan
         int gridX = static_cast<int>(std::round(currentPos.x));
         int gridZ = static_cast<int>(std::round(currentPos.z));
 
-        // Check if out of bounds
         if (gridX < 0 || gridX >= m_Width || gridZ < 0 || gridZ >= m_Height) {
             continue;
         }
 
         int tile = GetTile(gridX, gridZ);
 
-        // If we hit something solid (1=Wall, 2=Door)
-        // We ignore 0 (Floor) and 3 (Open Door)
-        if (tile == 1 || tile == 2) {
+        // Hit logic: Stop at Wall(1), Door(2), or Locked Door(5)
+        if (tile == 1 || tile == 2 || tile == 5) {
             result.hit = true;
             result.tileX = gridX;
             result.tileZ = gridZ;

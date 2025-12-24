@@ -2,6 +2,7 @@
 #include <SFML/Graphics.hpp>
 #include <memory>
 #include <vector>
+#include <random> // NEW: For modern randomness
 #include "../Graphics/Shader.h"
 #include "../Graphics/Renderer.h"
 #include "../Entities/Player.h"
@@ -48,16 +49,21 @@ private:
     unsigned int m_WallTex;
     unsigned int m_CeilingTex;
     unsigned int m_PaperTex;
+    unsigned int m_DoorTex;
 
     // Data for Rendering
     std::vector<glm::mat4> m_WallTransforms;
 
-    // Gameplay Data
-    glm::vec3 m_PaperPos;
-    glm::vec3 m_PlayerStartPos;
+    // Gameplay Data (Initialized to zero to satisfy Clang-Tidy)
+    glm::vec3 m_PaperPos{0.0f};
+    glm::vec3 m_PlayerStartPos{0.0f};
 
     // UI Resources
     sf::Font m_Font;
     sf::Text m_UIText;
     sf::Text m_CenterText;
+    sf::Text m_InteractText;
+
+    // Randomness (Fixes Clang-Tidy rand() warning)
+    std::mt19937 m_RNG;
 };

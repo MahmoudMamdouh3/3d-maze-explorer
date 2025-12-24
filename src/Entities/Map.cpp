@@ -35,7 +35,11 @@ bool Map::LoadLevel(const std::string& path, glm::vec3& outPlayerStart, glm::vec
 
             if (tile == '#') {
                 m_Grid[index] = 1; // Wall
-            } else if (tile == 'P') {
+            }
+            else if (tile == 'D') {
+                m_Grid[index] = 2; // Door (Closed) <--- NEW
+            }
+            else if (tile == 'P') {
                 m_Grid[index] = 0; // Floor
                 outPlayerStart = glm::vec3(x + 0.5f, 0.0f, z + 0.5f); // Center of tile
             } else if (tile == 'O') {
@@ -66,10 +70,54 @@ std::vector<AABB> Map::GetNearbyWalls(glm::vec3 position, float range) const {
 
     for (int z = startZ; z <= endZ; z++) {
         for (int x = startX; x <= endX; x++) {
-            if (GetTile(x, z) == 1) {
+            if (GetTile(x, z) == 1 || GetTile(x, z) == 2) {
                 walls.emplace_back(glm::vec3(x, 1.5f, z), glm::vec3(1.0f, 4.0f, 1.0f));
             }
         }
     }
     return walls;
+}
+
+// ADD THIS NEW FUNCTION at the end
+void Map::SetTile(int x, int z, int type) {
+    if (x >= 0 && x < m_Width && z >= 0 && z < m_Height) {
+        m_Grid[z * m_Width + x] = type;
+    }
+}
+
+RaycastResult Map::CastRay(glm::vec3 start, glm::vec3 direction, float maxDistance) const {
+    RaycastResult result = {false, 0, 0, 0, 0.0f};
+
+    // Step size: Smaller = More precise, Larger = Faster
+    float stepSize = 0.1f;
+    glm::vec3 currentPos = start;
+    float traveled = 0.0f;
+
+    while (traveled < maxDistance) {
+        currentPos += direction * stepSize;
+        traveled += stepSize;
+
+        int gridX = static_cast<int>(std::round(currentPos.x));
+        int gridZ = static_cast<int>(std::round(currentPos.z));
+
+        // Check if out of bounds
+        if (gridX < 0 || gridX >= m_Width || gridZ < 0 || gridZ >= m_Height) {
+            continue;
+        }
+
+        int tile = GetTile(gridX, gridZ);
+
+        // If we hit something solid (1=Wall, 2=Door)
+        // We ignore 0 (Floor) and 3 (Open Door)
+        if (tile == 1 || tile == 2) {
+            result.hit = true;
+            result.tileX = gridX;
+            result.tileZ = gridZ;
+            result.tileType = tile;
+            result.distance = traveled;
+            return result;
+        }
+    }
+
+    return result;
 }

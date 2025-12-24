@@ -7,7 +7,8 @@
 Game::Game()
     : m_State(GameState::MENU),
       m_UIText(m_Font),
-      m_CenterText(m_Font)
+      m_CenterText(m_Font),
+      m_InteractText(m_Font) // Fix: Initialize with font immediately
 {
     // --- 1. Setup Window ---
     sf::ContextSettings settings;
@@ -19,6 +20,10 @@ Game::Game()
     m_Window.create(sf::VideoMode({1280, 720}), "3D Maze - The Bureaucracy", sf::Style::Close, sf::State::Windowed, settings);
     m_Window.setFramerateLimit(144);
     m_Window.setMouseCursorVisible(true);
+
+    // Initialize Random Engine (Seeded with random device)
+    std::random_device rd;
+    m_RNG = std::mt19937(rd());
 
     // --- 2. Load OpenGL ---
     if (!gladLoadGLLoader(reinterpret_cast<GLADloadproc>(sf::Context::getFunction))) {
@@ -55,14 +60,16 @@ Game::Game()
     m_FloorTex = ResourceManager::LoadTexture("floor", "assets/textures/floor/fabricfloor.png");
     m_WallTex = ResourceManager::LoadTexture("wall", "assets/textures/wall/PaintedPlaster.png");
     m_CeilingTex = ResourceManager::LoadTexture("ceiling", "assets/textures/Ceiling/OfficeCeiling006_4K-PNG_Color.png");
-    m_PaperTex = m_FloorTex;
+    m_PaperTex = ResourceManager::LoadTexture("paper", "assets/textures/paper/paper.png");
+    m_DoorTex = ResourceManager::LoadTexture("door", "assets/textures/door/Door001_8K-PNG_Color.png");
 
     // --- 6. Load Audio Assets (Fixes Critique #6) ---
-    // Ensure these files exist in assets/sounds/
     m_Audio->LoadSound("footstep", "assets/sounds/footstep.wav");
     m_Audio->LoadSound("hum", "assets/sounds/fluorescent_hum.wav");
     m_Audio->LoadSound("win", "assets/sounds/win.wav");
     m_Audio->LoadSound("lose", "assets/sounds/lose.wav");
+    // flash flicker sounds:
+    m_Audio->LoadSound("flicker", "assets/sounds/flicker.wav");
 
     // Play loopers
     m_Audio->PlayMusic("assets/sounds/ambience.ogg", 30.0f);
@@ -88,6 +95,12 @@ Game::Game()
     }
     m_UIText.setCharacterSize(24); m_UIText.setFillColor(sf::Color::White);
     m_CenterText.setCharacterSize(40); m_CenterText.setFillColor(sf::Color::Red);
+
+    // Interaction Text Setup
+    m_InteractText.setCharacterSize(30);
+    m_InteractText.setFillColor(sf::Color::Yellow);
+    m_InteractText.setPosition({1280.0f / 2.0f - 100.0f, 720.0f / 2.0f + 50.0f});
+    m_InteractText.setString("");
 }
 
 Game::~Game() {
@@ -109,8 +122,9 @@ void Game::ProcessEvents() {
         if (event->is<sf::Event::Closed>()) m_Window.close();
 
         if (const auto* resizeEvent = event->getIf<sf::Event::Resized>()) {
-             glViewport(0, 0, resizeEvent->size.x, resizeEvent->size.y);
-             m_PostProcessor->Resize(resizeEvent->size.x, resizeEvent->size.y);
+             // Fix: Explicitly cast unsigned int to GLsizei (signed int)
+             glViewport(0, 0, static_cast<GLsizei>(resizeEvent->size.x), static_cast<GLsizei>(resizeEvent->size.y));
+             m_PostProcessor->Resize(static_cast<int>(resizeEvent->size.x), static_cast<int>(resizeEvent->size.y));
         }
 
         if (const auto* keyEvent = event->getIf<sf::Event::KeyPressed>()) {
@@ -145,6 +159,49 @@ void Game::Update(float dt) {
         // Pass Audio manager for Footsteps
         m_Player->Update(dt, *m_Map, *m_Audio);
 
+        // --- INTERACTION RAYCAST ---
+        m_InteractText.setString(""); // Clear previous frame text
+
+        // Raycast 3.0 units ahead
+        auto ray = m_Map->CastRay(m_Player->GetPosition(), m_Player->GetFront(), 3.0f); // Fix: Use auto
+
+        if (m_Player->GetBattery() < 5.0f && m_Player->GetBattery() > 0.0f) {
+            std::uniform_int_distribution<int> chance(0, 30); // 1 in 30 chance per frame
+            if (chance(m_RNG) == 0) {
+                m_Audio->PlayGlobal("flicker", 60.0f);
+            }
+        }
+        if (ray.hit && ray.tileType == 2) { // Hit a Door
+            m_InteractText.setString("[E] Open Door");
+
+            if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::E)) {
+                // Change Tile 2 (Door) to 3 (Open Door / Floor)
+                m_Map->SetTile(ray.tileX, ray.tileZ, 3);
+                m_Audio->PlaySpatial("footstep", {ray.tileX, 1.5, ray.tileZ}); // Use footstep or a specific door sound
+
+                // CRITICAL: We changed the map geometry.
+                // We MUST re-build the Instanced Wall Buffer so the physics/graphics sync up.
+                m_WallTransforms.clear();
+                for (int x = 0; x < m_Map->GetWidth(); x++) {
+                    for (int z = 0; z < m_Map->GetHeight(); z++) {
+                        if (m_Map->GetTile(x, z) == 1) { // Wall Only
+                            glm::mat4 model = glm::mat4(1.0f);
+                            model = glm::translate(model, glm::vec3(x, 1.5f, z));
+                            model = glm::scale(model, glm::vec3(1.0f, 4.0f, 1.0f));
+                            m_WallTransforms.push_back(model);
+                        }
+                    }
+                }
+                m_Renderer->SetupInstancedWalls(m_WallTransforms);
+            }
+        }
+        if (m_Player->GetBattery() < 5.0f && m_Player->GetBattery() > 0.0f) {
+            // 1 in 50 chance per frame to hear a click/spark
+            std::uniform_int_distribution<int> chance(0, 50);
+            if (chance(m_RNG) == 0) {
+                m_Audio->PlayGlobal("flicker", 50.0f); // Play slightly quieter
+            }
+        }
         if (glm::distance(m_Player->GetPosition(), m_PaperPos) < 1.0f) {
             m_Audio->PlayGlobal("win");
             m_State = GameState::WIN;
@@ -176,7 +233,10 @@ void Game::Render() {
         glm::mat4 projection = glm::perspective(glm::radians(45.0f), 1280.0f / 720.0f, 0.01f, 100.0f);
         glm::mat4 view = m_Player->GetViewMatrix();
         float batteryRatio = m_Player->GetBattery() / 180.0f;
-        float flickerVal = (std::rand() % 100) / 100.0f > 0.9f ? 0.2f : 1.0f;
+
+        // Fix: Use C++11 Random instead of rand()
+        std::uniform_real_distribution<float> dist(0.0f, 1.0f);
+        float flickerVal = dist(m_RNG) > 0.9f ? 0.2f : 1.0f;
 
         // A. INSTANCED WALLS
         m_InstancedShader->Use();
@@ -196,9 +256,10 @@ void Game::Render() {
         m_InstancedShader->SetFloat("batteryRatio", batteryRatio);
         m_InstancedShader->SetFloat("flicker", flickerVal);
 
-        m_Renderer->DrawInstancedWalls(*m_InstancedShader, m_WallTex, m_WallTransforms.size());
+        // Fix: Cast size_t to GLsizei (int) to avoid narrowing warning
+        m_Renderer->DrawInstancedWalls(*m_InstancedShader, m_WallTex, static_cast<GLsizei>(m_WallTransforms.size()));
 
-        // B. STANDARD OBJECTS (Floors/Objective)
+        // B. STANDARD OBJECTS (Floors/Objective/Doors)
         m_Shader->Use();
         m_Shader->SetMat4("projection", projection);
         m_Shader->SetMat4("view", view);
@@ -218,7 +279,9 @@ void Game::Render() {
 
         for (int x = 0; x < m_Map->GetWidth(); x++) {
             for (int z = 0; z < m_Map->GetHeight(); z++) {
-                if (m_Map->GetTile(x, z) == 0) { // Floor/Ceiling
+                int tile = m_Map->GetTile(x, z);
+
+                if (tile == 0 || tile == 3) { // Floor OR Open Door (Type 3)
                     glm::mat4 model = glm::mat4(1.0f);
                     model = glm::translate(model, glm::vec3(x, -0.5f, z));
                     m_Renderer->DrawCube(*m_Shader, model, m_FloorTex);
@@ -227,6 +290,23 @@ void Game::Render() {
                     model = glm::translate(model, glm::vec3(x, 3.5f, z));
                     model = glm::rotate(model, glm::radians(180.0f), glm::vec3(1.0f, 0.0f, 0.0f));
                     m_Renderer->DrawCube(*m_Shader, model, m_CeilingTex);
+                }
+                else if (tile == 2) { // Door (Closed)
+                    // 1. Draw the Door (Shorter)
+                    // Height: 2.5 units (Starts at -0.5, Ends at 2.0)
+                    glm::mat4 model = glm::mat4(1.0f);
+                    // Center Y calculation: Base(-0.5) + Height(2.5)/2 = 0.75
+                    model = glm::translate(model, glm::vec3(x, 0.75f, z));
+                    model = glm::scale(model, glm::vec3(1.0f, 2.5f, 1.0f));
+                    m_Renderer->DrawCube(*m_Shader, model, m_DoorTex);
+
+                    // 2. Draw Wall above Door (Filler)
+                    // Height: 1.5 units (Starts at 2.0, Ends at 3.5 [Ceiling])
+                    model = glm::mat4(1.0f);
+                    // Center Y calculation: Base(2.0) + Height(1.5)/2 = 2.75
+                    model = glm::translate(model, glm::vec3(x, 2.75f, z));
+                    model = glm::scale(model, glm::vec3(1.0f, 1.5f, 1.0f));
+                    m_Renderer->DrawCube(*m_Shader, model, m_WallTex); // Use Wall Texture
                 }
             }
         }
@@ -247,7 +327,6 @@ void Game::Render() {
     }
 
     // 4. DRAW UI (SFML)
-    // Critical: Ensure no VAO is bound! (Handled above)
     RenderUI();
 
     m_Window.display();
@@ -261,9 +340,16 @@ void Game::RenderUI() {
         m_CenterText.setPosition({300.f, 200.f});
         m_Window.draw(m_CenterText);
     } else if (m_State == GameState::PLAYING) {
+        // Fix: Explicitly cast float to int to avoid narrowing warning
         m_UIText.setString("Battery: " + std::to_string(static_cast<int>(m_Player->GetBattery())) + "s");
         m_UIText.setPosition({10.f, 10.f});
         m_Window.draw(m_UIText);
+
+        // Draw Interaction Text (if hitting a door)
+        if (!m_InteractText.getString().isEmpty()) {
+            m_Window.draw(m_InteractText);
+        }
+
     } else if (m_State == GameState::GAME_OVER) {
         m_CenterText.setString("LIGHTS OUT.\nPress ENTER to Retry");
         m_CenterText.setPosition({350.f, 300.f});

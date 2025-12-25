@@ -2,7 +2,7 @@
 layout (location = 0) in vec3 aPos;
 layout (location = 1) in vec2 aTexCoord;
 layout (location = 2) in vec3 aNormal;
-// AAA Upgrade: Per-instance transformation matrix
+
 layout (location = 3) in mat4 aInstanceMatrix;
 
 out vec2 TexCoord;
@@ -13,7 +13,7 @@ uniform mat4 view;
 uniform mat4 projection;
 
 void main() {
-    // Use the instance matrix instead of a uniform 'model'
+
     FragPos = vec3(aInstanceMatrix * vec4(aPos, 1.0));
     Normal = mat3(transpose(inverse(aInstanceMatrix))) * aNormal;
     TexCoord = aTexCoord;

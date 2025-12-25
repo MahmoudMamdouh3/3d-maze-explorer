@@ -1,6 +1,6 @@
 #include "AudioManager.h"
 #include <iostream>
-#include <SFML/Audio.hpp> // Ensure full inclusion
+#include <SFML/Audio.hpp>
 
 AudioManager::AudioManager() {
     sf::Listener::setGlobalVolume(100.0f);
@@ -18,15 +18,15 @@ void AudioManager::LoadSound(const std::string& name, const std::string& path) {
 void AudioManager::PlayGlobal(const std::string& name, float volume) {
     CleanFinishedSounds();
 
-    // SFML 3 / C++20 Fix: Use contains()
+
     if (!m_Buffers.contains(name)) return;
 
-    // AUDIO POLISH: Prevent Footstep Overlap
+
     if (name == "footstep") {
         for (const auto& s : m_Sounds) {
-            // SFML 3 FIX: Use sf::SoundSource::Status::Playing
+
             if (s->getStatus() == sf::SoundSource::Status::Playing && s->getVolume() > 0.0f) {
-                // If a footstep is already playing loudly, don't spam another one
+
                 return;
             }
         }
@@ -43,7 +43,7 @@ void AudioManager::PlayGlobal(const std::string& name, float volume) {
 void AudioManager::PlaySpatial(const std::string& name, glm::vec3 position, float volume, float attenuation) {
     CleanFinishedSounds();
 
-    if (!m_Buffers.contains(name)) return; // C++20 Fix
+    if (!m_Buffers.contains(name)) return;
 
     auto sound = std::make_unique<sf::Sound>(m_Buffers[name]);
     sound->setVolume(volume);
@@ -70,7 +70,7 @@ void AudioManager::StopMusic() {
     if (m_Music) m_Music->stop();
 }
 
-// NEW: Cuts all audio immediately (for Death/Win screens)
+
 void AudioManager::StopAllSounds() {
     for (auto& sound : m_Sounds) {
         sound->stop();
@@ -87,7 +87,7 @@ void AudioManager::UpdateListener(glm::vec3 position, glm::vec3 forward, glm::ve
 
 void AudioManager::CleanFinishedSounds() {
     std::erase_if(m_Sounds, [](const auto& sound) {
-        // SFML 3 FIX: Use sf::SoundSource::Status::Stopped
+
         return sound->getStatus() == sf::SoundSource::Status::Stopped;
     });
 }

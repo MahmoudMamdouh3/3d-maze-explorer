@@ -12,7 +12,7 @@ void Shader::Load(const char* vertPath, const char* fragPath) {
     std::ifstream vShaderFile;
     std::ifstream fShaderFile;
 
-    // Ensure ifstream objects can throw exceptions
+
     vShaderFile.exceptions (std::ifstream::failbit | std::ifstream::badbit);
     fShaderFile.exceptions (std::ifstream::failbit | std::ifstream::badbit);
 
@@ -36,19 +36,19 @@ void Shader::Load(const char* vertPath, const char* fragPath) {
 
     unsigned int vertex, fragment;
 
-    // Vertex Shader
+
     vertex = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vertex, 1, &vShaderCode, NULL);
     glCompileShader(vertex);
     CheckCompileErrors(vertex, "VERTEX");
 
-    // Fragment Shader
+
     fragment = glCreateShader(GL_FRAGMENT_SHADER);
     glShaderSource(fragment, 1, &fShaderCode, NULL);
     glCompileShader(fragment);
     CheckCompileErrors(fragment, "FRAGMENT");
 
-    // Shader Program
+
     ID = glCreateProgram();
     glAttachShader(ID, vertex);
     glAttachShader(ID, fragment);

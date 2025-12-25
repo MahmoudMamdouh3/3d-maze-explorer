@@ -16,12 +16,12 @@ Game::Game()
     settings.depthBits = 24;
     settings.majorVersion = 3;
     settings.minorVersion = 3;
-    settings.antiAliasingLevel = 8; // CHANGED: 8x MSAA for smoother edges
+    settings.antiAliasingLevel = 8;
     settings.attributeFlags = sf::ContextSettings::Default;
 
     sf::VideoMode desktop = sf::VideoMode::getDesktopMode();
     m_Window.create(desktop, "3D Maze - Mahmoud Mamdouh", sf::Style::Default, sf::State::Fullscreen, settings);
-    m_Window.setFramerateLimit(165); // CHANGED: Match 165Hz monitor
+    m_Window.setFramerateLimit(165);
     m_Window.setMouseCursorVisible(true);
 
     std::random_device rd;
@@ -255,19 +255,20 @@ void Game::Update(float dt) {
 void Game::Render() {
     sf::Vector2u windowSize = m_Window.getSize();
 
-    // 1. Handle Post-Processing State
+
     bool usePostProcessing = (m_State == GameState::PLAYING || m_State == GameState::PAUSED);
 
     if (usePostProcessing) {
-        // This now binds the Multisampled FBO if you applied the Anti-Aliasing fix
+
         m_PostProcessor->BeginRender();
     } else {
-        // Menu/Game Over screens draw directly to backbuffer
+
         glClearColor(0.005f, 0.005f, 0.01f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     }
 
-    // 2. Render 3D Scene
+
+
     if (m_State == GameState::PLAYING || m_State == GameState::PAUSED) {
         glm::mat4 projection = glm::perspective(glm::radians(m_Player->GetCurrentFOV()),
             static_cast<float>(windowSize.x) / static_cast<float>(windowSize.y), 0.01f, 100.0f);
@@ -278,13 +279,13 @@ void Game::Render() {
         std::uniform_real_distribution<float> dist(0.0f, 1.0f);
         if (m_Player->GetBattery() < 20.0f) flashInt *= (dist(m_RNG) > 0.9f ? 0.2f : 1.0f);
 
-        // --- DRAW INSTANCED WALLS ---
+
         m_InstancedShader->Use();
         m_InstancedShader->SetMat4("projection", projection);
         m_InstancedShader->SetMat4("view", view);
         m_InstancedShader->SetVec3("viewPos", m_Player->GetPosition());
 
-        // ADJUSTMENT: Brighter Ambient and Stronger Diffuse
+
         m_InstancedShader->SetVec3("spotLight.position", m_Player->GetFlashlightPosition());
         m_InstancedShader->SetVec3("spotLight.direction", m_Player->GetFront());
         m_InstancedShader->SetFloat("spotLight.cutOff", std::cos(glm::radians(12.5f)));
@@ -292,16 +293,16 @@ void Game::Render() {
         m_InstancedShader->SetFloat("spotLight.constant", 1.0f);
         m_InstancedShader->SetFloat("spotLight.linear", 0.045f);
         m_InstancedShader->SetFloat("spotLight.quadratic", 0.0075f);
-        // CHANGE THESE 3 LINES:
-        m_InstancedShader->SetVec3("spotLight.ambient", glm::vec3(0.01f, 0.01f, 0.02f)); // Was 0.005f
-        m_InstancedShader->SetVec3("spotLight.diffuse", glm::vec3(2.5f, 2.4f, 2.0f));    // Was 1.0f
+
+        m_InstancedShader->SetVec3("spotLight.ambient", glm::vec3(0.01f, 0.01f, 0.02f));
+        m_InstancedShader->SetVec3("spotLight.diffuse", glm::vec3(2.5f, 2.4f, 2.0f));
         m_InstancedShader->SetVec3("spotLight.specular", glm::vec3(1.0f));
         m_InstancedShader->SetFloat("batteryRatio", flashInt);
         m_InstancedShader->SetFloat("flicker", 1.0f);
 
         m_Renderer->DrawInstancedWalls(*m_InstancedShader, m_WallTex, static_cast<GLsizei>(m_WallTransforms.size()));
 
-        // --- DRAW SINGLE OBJECTS (Floor, Ceiling, Doors, Items) ---
+
         m_Shader->Use();
         m_Shader->SetMat4("projection", projection);
         m_Shader->SetMat4("view", view);
@@ -314,8 +315,8 @@ void Game::Render() {
         m_Shader->SetFloat("spotLight.constant", 1.0f);
         m_Shader->SetFloat("spotLight.linear", 0.045f);
         m_Shader->SetFloat("spotLight.quadratic", 0.0075f);
-        m_Shader->SetVec3("spotLight.ambient", glm::vec3(0.01f, 0.01f, 0.02f)); // Was 0.005f
-        m_Shader->SetVec3("spotLight.diffuse", glm::vec3(2.5f, 2.4f, 2.0f));    // Was 1.0f
+        m_Shader->SetVec3("spotLight.ambient", glm::vec3(0.01f, 0.01f, 0.02f));
+        m_Shader->SetVec3("spotLight.diffuse", glm::vec3(2.5f, 2.4f, 2.0f));
         m_Shader->SetVec3("spotLight.specular", glm::vec3(1.0f));
         m_Shader->SetFloat("batteryRatio", flashInt);
         m_Shader->SetFloat("flicker", 1.0f);
@@ -331,7 +332,7 @@ void Game::Render() {
                     m_Renderer->DrawCube(*m_Shader, model, m_FloorTex);
 
                     model = glm::mat4(1.0f);
-                    // FIXED GAP: Lowered Ceiling from 4.5f to 4.0f
+
                     model = glm::translate(model, glm::vec3(x + 0.5f, 4.0f, z + 0.5f));
                     model = glm::rotate(model, glm::radians(180.0f), glm::vec3(1.0f, 0.0f, 0.0f));
                     m_Renderer->DrawCube(*m_Shader, model, m_CeilingTex);
@@ -435,7 +436,7 @@ void Game::RenderUI() {
 
         float barWidth = 200.0f;
         float barHeight = 20.0f;
-        // ADJUSTMENT: Moved HUD higher (from -40.0f to -80.0f)
+
         sf::Vector2f barPos(20.0f, static_cast<float>(windowSize.y) - barHeight - 80.0f);
 
         sf::RectangleShape backBar(sf::Vector2f(barWidth, barHeight));
@@ -460,9 +461,9 @@ void Game::RenderUI() {
         m_Window.draw(m_UIText);
 
         sf::Vector2f stamPos = barPos;
-        stamPos.y += 35.0f; // Adjusted spacing
+        stamPos.y += 35.0f;
 
-        // NEW: Add "STAMINA" label above bar
+
         m_UIText.setString("STAMINA");
         m_UIText.setPosition({stamPos.x, stamPos.y - 25.0f});
         m_UIText.setScale({0.6f, 0.6f});
@@ -480,7 +481,7 @@ void Game::RenderUI() {
         frontStam.setFillColor(sf::Color::Cyan);
         m_Window.draw(frontStam);
 
-        // Reset Text Settings for other draws
+
         m_UIText.setScale({1.0f, 1.0f});
         m_UIText.setFillColor(sf::Color::White);
 

@@ -4,12 +4,12 @@
 #include <glm/glm.hpp>
 #include "../Physics/AABB.h"
 
-// Result of a "look" check
+
 struct RaycastResult {
-    bool hit;           // Did we hit anything?
-    int tileX, tileZ;   // Which grid cell?
-    int tileType;       // What is it? (1=Wall, 2=Door, etc)
-    float distance;     // How far away?
+    bool hit;
+    int tileX, tileZ;
+    int tileType;
+    float distance;
 };
 
 class Map {
@@ -20,9 +20,9 @@ public:
     std::vector<AABB> GetNearbyWalls(glm::vec3 position, float range) const;
 
     int GetTile(int x, int z) const;
-    void SetTile(int x, int z, int type); // NEW: Allow changing the map (Opening doors)
+    void SetTile(int x, int z, int type);
 
-    // NEW: The "Eye" Function
+
     RaycastResult CastRay(glm::vec3 start, glm::vec3 direction, float maxDistance) const;
 
     int GetWidth() const { return m_Width; }

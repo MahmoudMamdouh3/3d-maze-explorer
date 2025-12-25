@@ -12,22 +12,22 @@ public:
     void Resize(int width, int height);
     void Update(float dt);
 
-    void BeginRender(); // Binds the MSAA buffer
-    void EndRender();   // Resolves MSAA -> Texture -> Screen
+    void BeginRender();
+    void EndRender();
 
 private:
     void InitRenderData();
 
     Shader screenShader;
 
-    // 1. MSAA Buffer (We render the 3D scene here first)
-    unsigned int MSFBO; // Multisampled Framebuffer
-    unsigned int RBO;   // Multisampled Color Renderbuffer
-    unsigned int DB;    // Multisampled Depth Renderbuffer
 
-    // 2. Intermediate Buffer (We copy the result here to make it a texture)
-    unsigned int FBO;   // Regular Framebuffer
-    unsigned int TCB;   // Texture Color Buffer (The final image)
+    unsigned int MSFBO;
+    unsigned int RBO;
+    unsigned int DB;
+
+
+    unsigned int FBO;
+    unsigned int TCB;
 
     unsigned int rectVAO, rectVBO;
     float m_Time;

@@ -29,10 +29,10 @@ uniform SpotLight spotLight;
 void main() {
     vec4 texColor = texture(texture1, TexCoord);
 
-    // 1. GLOWING OBJECTS (Key/Badge)
+
     if (isUnlit) {
         FragColor = texColor;
-        // Apply simple fog to unlit objects too so they don't shine through walls
+
         float dist = length(viewPos - FragPos);
         float dens = 0.09;
         float fog = 1.0 / exp(dist * dist * dens * dens);
@@ -40,24 +40,24 @@ void main() {
         return;
     }
 
-    // 2. STANDARD LIGHTING
+
     vec3 norm = normalize(Normal);
     vec3 lightDir = normalize(spotLight.position - FragPos);
 
-    // Spotlight Soft Edge
+
     float theta = dot(lightDir, normalize(-spotLight.direction));
     float epsilon = spotLight.cutOff - spotLight.outerCutOff;
     float intensity = clamp((theta - spotLight.outerCutOff) / epsilon, 0.0, 1.0);
 
-    // Distance Attenuation
+
     float distance = length(spotLight.position - FragPos);
     float attenuation = 1.0 / (spotLight.constant + spotLight.linear * distance + spotLight.quadratic * (distance * distance));
 
-    // Battery & Flicker
+
     float powerFactor = clamp(batteryRatio, 0.0, 1.0);
     if (batteryRatio < 0.2) powerFactor *= flicker;
 
-    // Lighting Components
+
     vec3 ambient = spotLight.ambient * texColor.rgb;
 
     float diff = max(dot(norm, lightDir), 0.0);
@@ -70,15 +70,15 @@ void main() {
 
     vec3 result = ambient + (diffuse + specular) * intensity * attenuation * powerFactor;
 
-    // --- CINEMATIC FOG UPGRADE ---
-    // Old: Linear "Wall of Black" at 8 meters
-    // New: Exponential "Thick Mist" that surrounds you
+
+
+
     float fogDistance = length(viewPos - FragPos);
-    float fogDensity = 0.09; // Thickness of the fog
+    float fogDensity = 0.09;
     float fogFactor = 1.0 / exp(fogDistance * fogDistance * fogDensity * fogDensity);
     fogFactor = clamp(fogFactor, 0.0, 1.0);
 
-    // Mix result with a dark blue/black atmosphere color
+
     vec3 atmosphereColor = vec3(0.005, 0.005, 0.01);
 
     FragColor = vec4(mix(atmosphereColor, result, fogFactor), 1.0);
